@@ -20,6 +20,7 @@ import { MessageService } from 'primeng/api';
 import { AdminUserService } from 'src/app/core/services/admin-users.services';
 import { User } from 'src/app/core/models/user.model';
 import { UserUpdateComponent } from './user-update-dialog/user-update-dialog.component';
+import { UserCreateComponent } from './user-create-dialog/user-create-dialog.component'; // <-- NEW
 
 type UserRow = User & {
   fullName: string;
@@ -44,7 +45,8 @@ type UserRow = User & {
     SliderModule,
     ToggleButtonModule,
     ToastModule,
-    UserUpdateComponent
+    UserUpdateComponent,
+    UserCreateComponent // <-- NEW
   ],
   providers: [MessageService],
   template: `
@@ -71,7 +73,10 @@ type UserRow = User & {
 
       <ng-template #caption>
         <div class="flex justify-between items-center flex-column sm:flex-row gap-3">
-          <button pButton label="Clear" class="p-button-outlined" icon="pi pi-filter-slash" (click)="clear(dt)"></button>
+          <div class="flex gap-2">
+            <button pButton label="Add New User" icon="pi pi-user-plus" (click)="openCreate()"></button>
+            <button pButton label="Clear" class="p-button-outlined" icon="pi pi-filter-slash" (click)="clear(dt)"></button>
+          </div>
           <p-iconfield iconPosition="left" class="ml-auto">
             <p-inputicon><i class="pi pi-search"></i></p-inputicon>
             <input #globalFilter pInputText type="text" (input)="onGlobalFilter(dt, $event)"
@@ -137,6 +142,12 @@ type UserRow = User & {
     (closed)="onDialogClosed()"
     (updated)="onDialogUpdated($event)">
   </app-user-update>
+
+  <app-user-create
+    [visible]="createVisible"
+    (closed)="onCreateClosed()"
+    (created)="onUserCreated($event)">
+  </app-user-create>
   `,
   styles: [`
     .role-plain { font-weight: 600; }
@@ -149,6 +160,8 @@ export class UsersListComponent implements OnInit {
 
   updateVisible = false;
   selectedUserId: number | null = null;
+
+  createVisible = false; // <-- NEW
 
   @ViewChild('globalFilter') filter!: ElementRef;
 
@@ -210,6 +223,29 @@ export class UsersListComponent implements OnInit {
       detail: `${[updated.firstName, updated.lastName].filter(Boolean).join(' ') || 'User'} updated.`
     });
     this.onDialogClosed();
+  }
+
+  // NEW: open/close create dialog
+  openCreate() {
+    this.createVisible = true;
+  }
+  onCreateClosed() {
+    this.createVisible = false;
+  }
+  onUserCreated(u: User) {
+    const row: UserRow = {
+      ...u,
+      fullName: [u.firstName, u.middleName, u.lastName].filter(Boolean).join(' ').trim() || u.username,
+      createdAtDate: u.createdAt ? new Date(u.createdAt) : undefined
+    };
+    this.users = [row, ...this.users];
+    this.createVisible = false;
+
+    this.toast.add({
+      severity: 'success',
+      summary: 'Created',
+      detail: `${row.fullName || 'User'} created & invited.`
+    });
   }
 
   // Handle ToggleButton change event object

@@ -113,6 +113,12 @@ export class AdminUserService {
       params
     });
   }
+
+// --- inside AdminUserService class ---
+createAndInvite(body: AdminCreateUserRequest): Observable<User> {
+  return this.http.post<User>(`${this.base}/createandinvite`, body, { headers: this.authHeaders() });
+}
+
 }
 
 // Add this interface locally (or reuse your existing one)
@@ -124,3 +130,27 @@ export interface SortantCsvRow {
   espritEmail: string;
   phone?: string | null;
 }
+// --- add near other imports or at bottom of file ---
+export type AdminCreateUserRequest = {
+  username?: string | null;
+
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+
+  email: string;
+  personalEmail?: string | null;
+
+  role:
+    | 'STUDENT'
+    | 'TEACHER'
+    | 'PARTNER'
+    | 'MOBILITY_OFFICER'
+    | 'CHEF_OPTION'
+    | 'ADMIN';
+
+  personnelPhoneNumber: string;
+  domicilePhoneNumber?: string | null;
+
+  maritalStatus?: string | null;
+};
