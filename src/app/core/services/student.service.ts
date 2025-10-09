@@ -3,22 +3,29 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
+export type StudentType = 'SORTANT' | 'ENTRANT';
+
 export interface StudentSelfView {
+  // identity
   email: string;
   firstName: string;
   middleName: string | null;
   lastName: string;
-  studentIdentifier: string | null;
+  studentIdentifier: string | null; // only for SORTANT
+  type: StudentType;                // NEW
 
+  // contact
   emailPersonnel: string | null;
   maritalStatus: string | null;
   personnelPhoneNumber: string | null;
   domicilePhoneNumber: string | null;
 
+  // photo
   photoUrl?: string | null;
   avatarUrl?: string | null;
   photoObjectKey?: string | null;
 
+  // SORTANT (EspritEnrollment)
   entryDate: string | null;
   expectedExitDate: string | null;
 
@@ -32,6 +39,16 @@ export interface StudentSelfView {
 
   currentClass: string | null;
 
+  // ENTRANT (IncomingMobility) — NEW
+  homeUniversityName?: string | null;
+  homeUniversityCountry?: string | null;
+  homeDepartmentOrProgram?: string | null;
+  nominationReference?: string | null;
+  contactEmail?: string | null;
+  mobilityStart?: string | null; // yyyy-MM-dd
+  mobilityEnd?: string | null;   // yyyy-MM-dd
+
+  // grades
   semester1Grade: number | null;
   semester2Grade: number | null;
   semester3Grade: number | null;
@@ -40,20 +57,36 @@ export interface StudentSelfView {
 }
 
 export interface StudentSelfUpdate {
+  // contact
   emailPersonnel?: string | null;
   maritalStatus?: string | null;
   personnelPhoneNumber?: string | null;
   domicilePhoneNumber?: string | null;
+
+  // SORTANT (EspritEnrollment)
   field?: StudentSelfView['field'];
   optionCode?: StudentSelfView['optionCode'];
   currentClass?: string | null;
   entryDate?: string | null;
   expectedExitDate?: string | null;
+
+  // ENTRANT (IncomingMobility) — NEW
+  homeUniversityName?: string | null;
+  homeUniversityCountry?: string | null;
+  homeDepartmentOrProgram?: string | null;
+  nominationReference?: string | null;
+  contactEmail?: string | null;
+  mobilityStart?: string | null;
+  mobilityEnd?: string | null;
+
+  // grades
   semester1Grade?: number | null;
   semester2Grade?: number | null;
   semester3Grade?: number | null;
   semester4Grade?: number | null;
   semester5Grade?: number | null;
+
+  // photo
   photoObjectKey?: string | null;
 }
 
@@ -62,14 +95,11 @@ export class StudentService {
   private http = inject(HttpClient);
   private readonly base = environment.apiBase.replace(/\/+$/, '') + '/api';
 
-  private url(p: string) {
-    return `${this.base}/${p.replace(/^\/+/, '')}`;
-  }
+  private url(p: string) { return `${this.base}/${p.replace(/^\/+/, '')}`; }
 
   private readonly profileUrl = this.url('/student/profile');
   private readonly avatarUploadUrl = this.url('/student/profile/photo/upload');
 
-  /** add cookies + optional bearer from localStorage for all calls */
   private authHeaders(): HttpHeaders {
     const token =
       localStorage.getItem('access_token') ||

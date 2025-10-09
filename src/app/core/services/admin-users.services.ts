@@ -118,6 +118,18 @@ export class AdminUserService {
 createAndInvite(body: AdminCreateUserRequest): Observable<User> {
   return this.http.post<User>(`${this.base}/createandinvite`, body, { headers: this.authHeaders() });
 }
+// --- Admin self profile ---
+getSelf(): Observable<AdminSelfView> {
+  return this.http.get<AdminSelfView>(`${this.base}/me`, {
+    headers: this.authHeaders()
+  });
+}
+
+updateSelf(body: AdminSelfUpdate): Observable<AdminSelfView> {
+  return this.http.patch<AdminSelfView>(`${this.base}/me`, body, {
+    headers: this.authHeaders()
+  });
+}
 
 }
 
@@ -154,3 +166,22 @@ export type AdminCreateUserRequest = {
 
   maritalStatus?: string | null;
 };
+export interface AdminSelfView {
+  id: number;
+  username: string;
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+  email: string;
+  emailPersonel?: string | null;
+  role: 'ADMIN';
+  personnelPhoneNumber: string;
+  domicilePhoneNumber?: string | null;
+  active: boolean;
+}
+
+// only these three fields are updatable
+export type AdminSelfUpdate = Partial<Pick<
+  AdminSelfView,
+  'emailPersonel' | 'personnelPhoneNumber' | 'domicilePhoneNumber'
+>>;

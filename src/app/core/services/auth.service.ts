@@ -17,6 +17,8 @@ export interface RawLoginResponse {
   id_token?: string;
   message?: string;
   active?: boolean; // backend may return this
+  // ⬇️ include role from JwtResponse
+  role?: 'ADMIN' | 'MOBILITY_OFFICER' | 'TEACHER' | 'CHEF_OPTION' | 'PARTNER' | 'STUDENT';
 }
 
 export interface InvitePreviewDto {
@@ -30,11 +32,10 @@ export interface InvitePreviewDto {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  // ✅ KEEP YOUR ORIGINAL BASE
-  // environment.apiBase MUST end with '/', e.g. 'http://localhost:8080/'
+  // KEEP your original base
   private base = `${environment.apiBase}auth`;
 
-  // ✅ KEEP YOUR ORIGINAL JSON HEADERS
+  // KEEP your original headers
   private readonly json = new HttpHeaders({
     'Content-Type': 'application/json',
     'Accept': 'application/json'
@@ -51,34 +52,41 @@ export class AuthService {
     return token ? this.json.set('Authorization', `Bearer ${token}`) : this.json;
   }
 
-  // ---------- EXISTING FLOW (unchanged) ----------
+  // ---------- existing flow ----------
   signup(body: any): Observable<any> {
     return this.http.post<any>(`${this.base}/signup`, body, { headers: this.json });
   }
 
-  // ✅ DO NOT TOUCH: your original login
+  // ✅ original login (now also persists role)
   login(body: LoginRequest): Observable<{ token?: string; raw: RawLoginResponse }> {
     return this.http
       .post<RawLoginResponse>(`${this.base}/signin`, body, { headers: this.json })
       .pipe(
         map((raw) => {
           const token = raw.accessToken ?? raw.token ?? raw.jwt ?? raw.id_token ?? undefined;
-          // (Optional) keep storing active flag; harmless for old flow
+
+          // optional: active flag
           if (typeof raw.active === 'boolean') {
             localStorage.setItem('user_active', String(raw.active));
           } else {
             localStorage.removeItem('user_active');
           }
+
+          // 🔹 persist role for menu/profile routing
+          if (raw.role) {
+            localStorage.setItem('user_role', raw.role);
+          } else {
+            localStorage.removeItem('user_role');
+          }
+
           return { token, raw };
         }),
         tap(({ token }) => this.tokens.set(token))
       );
   }
 
-  // ---------- NEW: NON-SORTANT FLOW ADDITIONS ----------
-  // separate name for the non-sortant login screen (same endpoint, same headers)
+  // ✅ alias kept for your login-other page (fixes TS2339)
   loginOther(body: LoginRequest): Observable<{ token?: string; raw: RawLoginResponse }> {
-    // reuse the exact same call to avoid divergence
     return this.login(body);
   }
 
@@ -87,11 +95,11 @@ export class AuthService {
     return this.http.post<void>(
       `${this.base}/first-login/complete`,
       { newPassword },
-      { headers: this.authJson() } // << Bearer added here ONLY
+      { headers: this.authJson() }
     );
   }
 
-  // ---------- The rest (unchanged / already present) ----------
+  // ---------- the rest (unchanged) ----------
   previewInvite(token: string): Observable<InvitePreviewDto> {
     const params = new HttpParams().set('token', token);
     return this.http.get<InvitePreviewDto>(`${this.base}/invite/preview`, { params });
@@ -115,5 +123,29 @@ export class AuthService {
   logout() {
     this.tokens.clear();
     localStorage.removeItem('user_active');
+    localStorage.removeItem('user_role'); // clear persisted role
+  }
+    /** Forgot password: sends a recovery email (backend always 204) */
+  forgotPassword(email: string): Observable<void> {
+    return this.http.post<void>(
+      `${this.base}/password/forgot`,
+      { email },
+      { headers: this.json }
+    );
+  }
+    /** Preview token -> validate before showing reset form */
+  previewResetToken(token: string): Observable<{ valid: boolean; email?: string }> {
+    const params = new HttpParams().set('token', token);
+    return this.http.get<{ valid: boolean; email?: string }>(`${this.base}/password/preview`, { params });
+  }
+
+  /** Reset password with token */
+  resetPassword(token: string, newPassword: string): Observable<void> {
+    const params = new HttpParams().set('token', token);
+    return this.http.post<void>(
+      `${this.base}/password/reset`,
+      { newPassword },
+      { headers: this.json, params }
+    );
   }
 }

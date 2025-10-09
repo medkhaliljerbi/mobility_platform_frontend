@@ -1,4 +1,3 @@
-// src/app/pages/student/profile.page.ts
 import { Component, OnInit, ElementRef, ViewChild, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
@@ -72,34 +71,50 @@ const MARITAL_STATUS_OPTIONS = [
     DatePickerModule, InputNumberModule, ToastModule
   ],
   providers: [MessageService],
-  styles: [`
-  .page { display:flex; justify-content:center; padding:1rem; }
-  .shell { width:100%; max-width:720px; margin:0 auto; }
-  .card-title { display:flex; justify-content:space-between; align-items:center; }
-  .title { font-weight:600; font-size:1.05rem; }
+ styles: [`
+  /* Layout */
+  .page { display:flex; justify-content:center; padding:.5rem; }
+  .shell { width:100%; max-width:1120px; margin:0 auto; } /* was 720px */
 
-  .avatar { margin: 16px auto 6px auto; width:144px; height:144px; border-radius:9999px; overflow:hidden;
-            border:1px solid var(--surface-300); position:relative; background:#1f2937; display:flex; align-items:center; justify-content:center; }
+  /* Card header */
+  .card-title { display:flex; justify-content:space-between; align-items:center; }
+  .title { font-weight:700; font-size:1.25rem; } /* bigger title */
+
+  /* Avatar */
+  .avatar {
+    margin: 20px auto 8px auto;
+    width: 180px; height: 180px;                 /* bigger avatar */
+    border-radius: 9999px; overflow: hidden;
+    border: 1px solid var(--surface-300);
+    position: relative; background: #1f2937;
+    display:flex; align-items:center; justify-content:center;
+  }
   .avatar img { width:100%; height:100%; object-fit:cover; display:block; }
-  .avatar i { color:#cbd5e1; font-size:2rem; }
+  .avatar i { font-size:2.25rem; color:#cbd5e1; }
   .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:.5rem;
              background:rgba(0,0,0,.55); opacity:0; transition:opacity .15s; }
   .avatar:hover .overlay { opacity:1; }
 
+  /* Form blocks */
   .form-section { margin-top:.75rem; }
   .group { display:flex; flex-direction:column; gap:.6rem; }
-  .ctrl { width:100%; }
-
-  .field { display:flex; flex-direction:column; gap:.25rem; }
-  .label { font-size:.85rem; color:var(--text-color-secondary); }
+  .ctrl { width:100%; font-size:1rem; }          /* bigger input text */
+  .field { display:flex; flex-direction:column; gap:.35rem; }
+  .label { font-size:1rem; font-weight:600; color:var(--text-color); } /* bigger labels */
 
   .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
-  @media (max-width:640px){ .grid-2 { grid-template-columns:1fr; } }
+  @media (max-width: 640px) {
+    .grid-2 { grid-template-columns:1fr; }
+    .shell { max-width:100%; }
+  }
 
-  .grades { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
-  @media (max-width:640px){ .grades { grid-template-columns:1fr; } }
+  /* Readonly look */
+  input.identity[readonly] {
+    background: var(--surface-100);
+    color: var(--text-color-secondary);
+  }
 
-  /* View-mode lock (non-identity fields) */
+  /* Keep form enabled visuals when page is in "locked" mode */
   .locked, .locked * { pointer-events: none !important; }
   .locked .p-inputtext,
   .locked .p-inputnumber-input,
@@ -110,12 +125,20 @@ const MARITAL_STATUS_OPTIONS = [
     color: inherit !important;
   }
 
-  /* Identity (always readonly) */
-  input.identity[readonly] {
-    background: var(--surface-100);
-    color: var(--text-color-secondary);
+  /* PrimeNG control sizing (needs ::ng-deep to reach inside) */
+  :host ::ng-deep .p-inputtext,
+  :host ::ng-deep .p-inputnumber-input,
+  :host ::ng-deep .p-dropdown .p-dropdown-label,
+  :host ::ng-deep .p-calendar .p-inputtext {
+    font-size: 1rem;
+    padding: .8rem .75rem;                         /* slightly taller */
   }
-  `],
+
+  /* Trim card’s inner padding a bit so content feels wider */
+  :host ::ng-deep .p-card .p-card-body { padding: 1rem 1.25rem; }
+  :host ::ng-deep .p-card .p-card-title { font-size: 1.25rem; }
+`]
+,
   template: `
 <p-fluid>
   <div class="page bg-surface-50 dark:bg-surface-950">
@@ -153,10 +176,15 @@ const MARITAL_STATUS_OPTIONS = [
             <div class="label">Esprit Email</div>
             <input pInputText [value]="m()?.email ?? ''" class="ctrl identity" readonly />
           </div>
+
           <div class="grid-2">
-            <div class="field">
+            <div class="field" *ngIf="isSortant()">
               <div class="label">Esprit ID</div>
               <input pInputText [value]="espritId() ?? ''" class="ctrl identity" readonly />
+            </div>
+            <div class="field">
+              <div class="label">Student Type</div>
+              <input pInputText [value]="m()?.type ?? ''" class="ctrl identity" readonly />
             </div>
             <div class="field">
               <div class="label">First Name</div>
@@ -177,6 +205,7 @@ const MARITAL_STATUS_OPTIONS = [
         <div class="form-section">
           <form [formGroup]="form" class="group">
 
+            <!-- Contact -->
             <div class="field">
               <div class="label">Personal Email</div>
               <input pInputText formControlName="emailPersonnel" class="ctrl" [readonly]="!editing()" />
@@ -193,7 +222,6 @@ const MARITAL_STATUS_OPTIONS = [
               </div>
             </div>
 
-            <!-- Marital Status -->
             <div class="field" [class.locked]="!editing()">
               <div class="label">Marital Status</div>
               <p-select formControlName="maritalStatus"
@@ -203,7 +231,8 @@ const MARITAL_STATUS_OPTIONS = [
               </p-select>
             </div>
 
-            <div class="grid-2">
+            <!-- SORTANT (Esprit Enrollment) -->
+            <div class="grid-2" *ngIf="isSortant()">
               <div class="field" [class.locked]="!editing()">
                 <div class="label">Field</div>
                 <p-select formControlName="field"
@@ -237,7 +266,39 @@ const MARITAL_STATUS_OPTIONS = [
               </div>
             </div>
 
-            <!-- Grades (S1 & S2 required; 0..20; comma decimals) -->
+            <!-- ENTRANT (Incoming Mobility) -->
+            <div class="grid-2" *ngIf="isEntrant()">
+              <div class="field">
+                <div class="label">Home University</div>
+                <input pInputText formControlName="homeUniversityName" class="ctrl" [readonly]="!editing()" />
+              </div>
+              <div class="field">
+                <div class="label">Home Country</div>
+                <input pInputText formControlName="homeUniversityCountry" class="ctrl" [readonly]="!editing()" />
+              </div>
+              <div class="field">
+                <div class="label">Home Department/Program</div>
+                <input pInputText formControlName="homeDepartmentOrProgram" class="ctrl" [readonly]="!editing()" />
+              </div>
+              <div class="field">
+                <div class="label">Nomination Reference</div>
+                <input pInputText formControlName="nominationReference" class="ctrl" [readonly]="!editing()" />
+              </div>
+              <div class="field">
+                <div class="label">Contact Email</div>
+                <input pInputText formControlName="contactEmail" class="ctrl" [readonly]="!editing()" />
+              </div>
+              <div class="field" [class.locked]="!editing()">
+                <div class="label">Mobility Start</div>
+                <p-datepicker formControlName="mobilityStart" dateFormat="yy-mm-dd" class="ctrl"></p-datepicker>
+              </div>
+              <div class="field" [class.locked]="!editing()">
+                <div class="label">Mobility End</div>
+                <p-datepicker formControlName="mobilityEnd" dateFormat="yy-mm-dd" class="ctrl"></p-datepicker>
+              </div>
+            </div>
+
+            <!-- Grades -->
             <div class="grades">
               <div class="field" [class.locked]="!editing()">
                 <div class="label">Semester 1 *</div>
@@ -308,21 +369,33 @@ export class StudentProfilePageComponent implements OnInit {
   fieldOptions = FIELD_OPTIONS;
   maritalOptions = MARITAL_STATUS_OPTIONS;
 
-  form = this.fb.group({
-    emailPersonnel: [''],
+  isSortant = computed(() => this.m()?.type === 'SORTANT');
+  isEntrant  = computed(() => this.m()?.type === 'ENTRANT');
 
+  form = this.fb.group({
+    // contact
+    emailPersonnel: [''],
     personnelPhoneNumber: ['', Validators.required],
     domicilePhoneNumber: [''],
     maritalStatus: [''],
 
+    // SORTANT
     field: <FieldType | null>(null),
     optionCode: <OptionCodeType | null>(null),
     currentClass: [''],
-
     entryDate: <Date | null>(null),
     expectedExitDate: <Date | null>(null),
 
-    // S1 & S2 are required; all 0..20
+    // ENTRANT — NEW
+    homeUniversityName: [''],
+    homeUniversityCountry: [''],
+    homeDepartmentOrProgram: [''],
+    nominationReference: [''],
+    contactEmail: [''],
+    mobilityStart: <Date | null>(null),
+    mobilityEnd: <Date | null>(null),
+
+    // grades
     semester1Grade: <any>[null, [Validators.required, Validators.min(0), Validators.max(20)]],
     semester2Grade: <any>[null, [Validators.required, Validators.min(0), Validators.max(20)]],
     semester3Grade: <any>[null, [Validators.min(0), Validators.max(20)]],
@@ -361,32 +434,42 @@ export class StudentProfilePageComponent implements OnInit {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     this.busy.set(true);
 
-    // Only send modified (dirty) fields
     const f = this.form;
-    const v = f.value;
+    const v = f.value as any;
     const payload: StudentSelfUpdate = {};
 
     const setIfDirty = <K extends keyof StudentSelfUpdate>(ctrl: string, key: K, val: StudentSelfUpdate[K]) => {
       if (f.get(ctrl)?.dirty) (payload as any)[key] = val;
     };
 
+    // contact
     setIfDirty('emailPersonnel',      'emailPersonnel',      v.emailPersonnel ?? null);
     setIfDirty('personnelPhoneNumber','personnelPhoneNumber',v.personnelPhoneNumber ?? null);
     setIfDirty('domicilePhoneNumber', 'domicilePhoneNumber', v.domicilePhoneNumber ?? null);
     setIfDirty('maritalStatus',       'maritalStatus',       v.maritalStatus ?? null);
 
+    // SORTANT
     setIfDirty('field',               'field',               v.field ?? null);
     setIfDirty('optionCode',          'optionCode',          v.optionCode ?? null);
     setIfDirty('currentClass',        'currentClass',        v.currentClass ?? null);
-
     setIfDirty('entryDate',           'entryDate',           v.entryDate ? this.ymd(v.entryDate as Date) : null);
     setIfDirty('expectedExitDate',    'expectedExitDate',    v.expectedExitDate ? this.ymd(v.expectedExitDate as Date) : null);
 
-    setIfDirty('semester1Grade',      'semester1Grade',      typeof v.semester1Grade === 'number' ? v.semester1Grade : null);
-    setIfDirty('semester2Grade',      'semester2Grade',      typeof v.semester2Grade === 'number' ? v.semester2Grade : null);
-    setIfDirty('semester3Grade',      'semester3Grade',      typeof v.semester3Grade === 'number' ? v.semester3Grade : null);
-    setIfDirty('semester4Grade',      'semester4Grade',      typeof v.semester4Grade === 'number' ? v.semester4Grade : null);
-    setIfDirty('semester5Grade',      'semester5Grade',      typeof v.semester5Grade === 'number' ? v.semester5Grade : null);
+    // ENTRANT — NEW
+    setIfDirty('homeUniversityName',      'homeUniversityName',      v.homeUniversityName ?? null);
+    setIfDirty('homeUniversityCountry',   'homeUniversityCountry',   v.homeUniversityCountry ?? null);
+    setIfDirty('homeDepartmentOrProgram', 'homeDepartmentOrProgram', v.homeDepartmentOrProgram ?? null);
+    setIfDirty('nominationReference',     'nominationReference',     v.nominationReference ?? null);
+    setIfDirty('contactEmail',            'contactEmail',            v.contactEmail ?? null);
+    setIfDirty('mobilityStart',           'mobilityStart',           v.mobilityStart ? this.ymd(v.mobilityStart as Date) : null);
+    setIfDirty('mobilityEnd',             'mobilityEnd',             v.mobilityEnd ? this.ymd(v.mobilityEnd as Date) : null);
+
+    // grades
+    setIfDirty('semester1Grade', 'semester1Grade', typeof v.semester1Grade === 'number' ? v.semester1Grade : null);
+    setIfDirty('semester2Grade', 'semester2Grade', typeof v.semester2Grade === 'number' ? v.semester2Grade : null);
+    setIfDirty('semester3Grade', 'semester3Grade', typeof v.semester3Grade === 'number' ? v.semester3Grade : null);
+    setIfDirty('semester4Grade', 'semester4Grade', typeof v.semester4Grade === 'number' ? v.semester4Grade : null);
+    setIfDirty('semester5Grade', 'semester5Grade', typeof v.semester5Grade === 'number' ? v.semester5Grade : null);
 
     this.api.updateMe(payload).subscribe({
       next: (res) => {
@@ -434,18 +517,29 @@ export class StudentProfilePageComponent implements OnInit {
       (me.maritalStatus === 'Mr' || me.maritalStatus === 'Mrs') ? 'Married' : (me.maritalStatus ?? '');
 
     this.form.reset({
+      // contact
       emailPersonnel: me.emailPersonnel ?? '',
       maritalStatus: normalizedMarital,
       personnelPhoneNumber: me.personnelPhoneNumber ?? '',
       domicilePhoneNumber: me.domicilePhoneNumber ?? '',
 
+      // SORTANT
       field: (me.field ?? null) as FieldType | null,
       optionCode: (me.optionCode ?? null) as OptionCodeType | null,
       currentClass: me.currentClass ?? '',
-
       entryDate: me.entryDate ? new Date(me.entryDate) : null,
       expectedExitDate: me.expectedExitDate ? new Date(me.expectedExitDate) : null,
 
+      // ENTRANT
+      homeUniversityName: me.homeUniversityName ?? '',
+      homeUniversityCountry: me.homeUniversityCountry ?? '',
+      homeDepartmentOrProgram: me.homeDepartmentOrProgram ?? '',
+      nominationReference: me.nominationReference ?? '',
+      contactEmail: me.contactEmail ?? '',
+      mobilityStart: me.mobilityStart ? new Date(me.mobilityStart) : null,
+      mobilityEnd: me.mobilityEnd ? new Date(me.mobilityEnd) : null,
+
+      // grades
       semester1Grade: me.semester1Grade ?? null,
       semester2Grade: me.semester2Grade ?? null,
       semester3Grade: me.semester3Grade ?? null,
