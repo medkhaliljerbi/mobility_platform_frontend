@@ -7,7 +7,9 @@ import { StudentProfilePageComponent } from './student/profile.page';
 import { TeacherProfilePageComponent } from './teacher/profile.page';
 import { PartnerProfilePageComponent } from './partnerSchool/profile.page';
 import { AgentMobiliteProfilePageComponent } from './mobilityAgent/profile.page';
-import {AdminProfilePageComponent} from './admin/admin-profile-page.component'
+import {AdminProfilePageComponent} from './admin/admin-profile-page.component';
+import {OfferCreatePageComponent} from './offer/offer-create-page.component';
+import {OfferListComponent} from './offer/offer-list-page-component'
 export default [
   { path: 'documentation', component: Documentation },
   { path: 'crud', component: Crud },
@@ -18,5 +20,7 @@ export default [
   { path: 'partner/profile', component: PartnerProfilePageComponent },       // ✅ fixed
   { path: 'mobilityagent/profile', component: AgentMobiliteProfilePageComponent }, // ✅ fixed
 { path: 'admin/profile', component: AdminProfilePageComponent },
+{ path: 'offer/create', component: OfferCreatePageComponent },
+{ path: 'offer/list', component: OfferListComponent },
   { path: '**', redirectTo: '/notfound' }
 ] as Routes;
