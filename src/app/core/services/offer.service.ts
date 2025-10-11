@@ -11,8 +11,8 @@ export interface OfferView {
   id: number;
   title: string;
   description: string;
-  seats: number;
-  deadline: string | null;
+  seats: number;                 // maps to backend column (a.k.a availableSlots in some UIs)
+  deadline: string | null;       // ISO
   type: OfferType;
   targetYear: TargetYear;
   topicTags: string[] | null;
@@ -33,7 +33,7 @@ export interface OfferCreatePayload {
   targetYear: TargetYear;
   topicTags?: string[] | null;
   requiredDocs?: string[] | null;
-  formJson?: string | null;
+  formJson?: string | { fields: string[] } | null; // jsonb
 }
 
 @Injectable({ providedIn: 'root' })
@@ -53,8 +53,34 @@ export class OfferService {
   }
   private opts() { return { withCredentials: true, headers: this.authHeaders() }; }
 
+  /* --------- CRUD + image --------- */
+
   createOffer(payload: OfferCreatePayload): Observable<OfferView> {
-    return this.http.post<OfferView>(this.url('/offers'), payload, this.opts());
+    const body: any = { ...payload };
+    if (typeof body.formJson === 'string') {
+      try { body.formJson = JSON.parse(body.formJson); } catch {}
+    }
+    return this.http.post<OfferView>(this.url('/offers'), body, this.opts());
+  }
+
+  getAllOffers(): Observable<OfferView[]> {
+    return this.http.get<OfferView[]>(this.url('/offers/all'), this.opts());
+  }
+
+  getOffer(id: number): Observable<OfferView> {
+    return this.http.get<OfferView>(this.url(`/offers/${id}`), this.opts());
+  }
+
+  updateOffer(id: number, patch: Partial<OfferCreatePayload & { status: OfferStatus }>): Observable<OfferView> {
+    const body: any = { ...patch };
+    if (typeof body.formJson === 'string') {
+      try { body.formJson = JSON.parse(body.formJson); } catch {}
+    }
+    return this.http.put<OfferView>(this.url(`/offers/${id}`), body, this.opts());
+  }
+
+  deleteOffer(id: number): Observable<void> {
+    return this.http.delete<void>(this.url(`/offers/${id}`), this.opts());
   }
 
   uploadOfferImage(id: number, file: File): Observable<OfferView> {
@@ -63,11 +89,10 @@ export class OfferService {
     return this.http.post<OfferView>(this.url(`/offers/${id}/image`), form, this.opts());
   }
 
-  getOffer(id: number): Observable<OfferView> {
-    return this.http.get<OfferView>(this.url(`/offers/${id}`), this.opts());
+  removeOfferImage(id: number): Observable<OfferView> {
+    return this.http.delete<OfferView>(this.url(`/offers/${id}/image`), this.opts());
   }
 
-  getAllOffers(): Observable<OfferView[]> {
-    return this.http.get<OfferView[]>(this.url('/offers/all'), this.opts());
-  }
+  openOffer(id: number){  return this.http.put<OfferView>(this.url(`/offers/${id}/open`),  {}, this.opts()); }
+  closeOffer(id: number){ return this.http.put<OfferView>(this.url(`/offers/${id}/close`), {}, this.opts()); }
 }
