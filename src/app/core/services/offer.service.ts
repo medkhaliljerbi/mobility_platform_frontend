@@ -15,6 +15,14 @@ export interface OfferView {
   deadline: string | null;       // ISO
   type: OfferType;
   targetYear: TargetYear;
+
+  // NEW: snapshot fields on the Offer entity
+  universityName: string;
+  countryCode?: string | null;
+  addressLine?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+
   topicTags: string[] | null;
   requiredDocs: string[] | null;
   formJson: { fields: string[] } | null;
@@ -31,6 +39,14 @@ export interface OfferCreatePayload {
   deadline: string | null;
   type: OfferType;
   targetYear: TargetYear;
+
+  // NEW: snapshot fields in payload
+  universityName: string;
+  countryCode?: string | null;
+  addressLine?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+
   topicTags?: string[] | null;
   requiredDocs?: string[] | null;
   formJson?: string | { fields: string[] } | null; // jsonb

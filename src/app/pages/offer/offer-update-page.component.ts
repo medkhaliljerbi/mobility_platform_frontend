@@ -145,6 +145,34 @@ const TARGET_YEAR_OPTS = [
             </div>
           </div>
 
+          <!-- NEW: University & Contact Snapshot -->
+          <div class="grid-2">
+            <div class="field">
+              <span class="label">University Name *</span>
+              <input pInputText formControlName="universityName"/>
+            </div>
+            <div class="field">
+              <span class="label">Country Code (ISO-2)</span>
+              <input pInputText formControlName="countryCode" placeholder="e.g., TN, FR"/>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="label">Address</span>
+            <input pInputText formControlName="addressLine"/>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <span class="label">Contact Email</span>
+              <input pInputText formControlName="contactEmail" type="email"/>
+            </div>
+            <div class="field">
+              <span class="label">Contact Phone</span>
+              <input pInputText formControlName="contactPhone" placeholder="+216..."/>
+            </div>
+          </div>
+
           <div class="field">
             <span class="label">Offer Image</span>
             <div class="image">
@@ -201,6 +229,13 @@ export class OfferUpdatePageComponent implements OnInit {
     deadline:       <Date | null>(null),
     type:           <OfferType | null>(null),
     targetYear:     <TargetYear | null>(null),
+
+    // NEW fields
+    universityName: ['', Validators.required],
+    countryCode:    [''],
+    addressLine:    [''],
+    contactEmail:   ['', Validators.email],
+    contactPhone:   [''],
   });
 
   ngOnInit(): void {
@@ -217,7 +252,14 @@ export class OfferUpdatePageComponent implements OnInit {
           seats: o.seats,
           deadline: o.deadline ? new Date(o.deadline) : null,
           type: o.type,
-          targetYear: o.targetYear
+          targetYear: o.targetYear,
+
+          // NEW
+          universityName: o.universityName,
+          countryCode: o.countryCode ?? '',
+          addressLine: o.addressLine ?? '',
+          contactEmail: o.contactEmail ?? '',
+          contactPhone: o.contactPhone ?? '',
         });
         this.topicTags.set(o.topicTags ?? []);
         this.requiredDocs.set(o.requiredDocs ?? []);
@@ -257,53 +299,58 @@ export class OfferUpdatePageComponent implements OnInit {
     return clean.length ? { fields: clean } : null;
   }
 
-onSave(){
-  if (this.form.invalid) { this.form.markAllAsTouched(); return; }
-  this.busy.set(true);
+  onSave(){
+    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    this.busy.set(true);
 
-  const v = this.form.value as any;
-  const patch: Partial<OfferCreatePayload> & any = {
-    title: v.title,
-    description: v.description,
-    seats: Number(v.seats),
-    deadline: v.deadline ? this.ymd(v.deadline as Date) : null,
-    type: v.type!,
-    targetYear: v.targetYear!,
-    topicTags: this.topicTags(),
-    requiredDocs: this.requiredDocs(),
-    formJson: this.buildFormJson(this.formFields()),
-  };
+    const v = this.form.value as any;
+    const patch: Partial<OfferCreatePayload> & any = {
+      title: v.title,
+      description: v.description,
+      seats: Number(v.seats),
+      deadline: v.deadline ? this.ymd(v.deadline as Date) : null,
+      type: v.type!,
+      targetYear: v.targetYear!,
+      topicTags: this.topicTags(),
+      requiredDocs: this.requiredDocs(),
+      formJson: this.buildFormJson(this.formFields()),
 
-  this.srv.updateOffer(this.id, patch).subscribe({
-    next: () => {
-      const img = this.file();
-      if (!img) {
-        this.toast.add({severity:'success', summary:'Offer updated'});
-        this.busy.set(false);
-        this.router.navigate(['/pages/offer/list']);   // <-- FIXED
-        return;
-      }
-      this.srv.uploadOfferImage(this.id, img).subscribe({
-        next: () => {
+      // NEW
+      universityName: v.universityName,
+      countryCode: v.countryCode || null,
+      addressLine: v.addressLine || null,
+      contactEmail: v.contactEmail || null,
+      contactPhone: v.contactPhone || null,
+    };
+
+    this.srv.updateOffer(this.id, patch).subscribe({
+      next: () => {
+        const img = this.file();
+        if (!img) {
           this.toast.add({severity:'success', summary:'Offer updated'});
           this.busy.set(false);
-          this.router.navigate(['/pages/offer/list']); // <-- FIXED
-        },
-        error: (err) => {
-          this.busy.set(false);
-          this.toast.add({severity:'warn', summary:'Updated (image failed)', detail: this.err(err)});
-          this.router.navigate(['/pages/offer/list']); // <-- FIXED
+          this.router.navigate(['/pages/offer/list']);
+          return;
         }
-      });
-    },
-    error: (err) => {
-      this.busy.set(false);
-      this.toast.add({severity:'error', summary:'Update failed', detail:this.err(err)});
-    }
-  });
-}
-
-
+        this.srv.uploadOfferImage(this.id, img).subscribe({
+          next: () => {
+            this.toast.add({severity:'success', summary:'Offer updated'});
+            this.busy.set(false);
+            this.router.navigate(['/pages/offer/list']);
+          },
+          error: (err) => {
+            this.busy.set(false);
+            this.toast.add({severity:'warn', summary:'Updated (image failed)', detail: this.err(err)});
+            this.router.navigate(['/pages/offer/list']);
+          }
+        });
+      },
+      error: (err) => {
+        this.busy.set(false);
+        this.toast.add({severity:'error', summary:'Update failed', detail:this.err(err)});
+      }
+    });
+  }
 
   private err(e:any){ return e?.error?.message || e?.message || 'Unexpected error'; }
 }

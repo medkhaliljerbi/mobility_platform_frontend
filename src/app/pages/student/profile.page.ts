@@ -298,46 +298,38 @@ const MARITAL_STATUS_OPTIONS = [
               </div>
             </div>
 
-            <!-- Grades -->
+            <!-- Grades (Year-based) -->
             <div class="grades">
               <div class="field" [class.locked]="!editing()">
-                <div class="label">Semester 1 *</div>
-                <p-inputNumber formControlName="semester1Grade"
+                <div class="label">First Year *</div>
+                <p-inputNumber formControlName="firstYearGrade"
                                mode="decimal" [min]="0" [max]="20" [step]="0.01"
                                locale="fr-FR" [minFractionDigits]="0" [maxFractionDigits]="2"
-                               [useGrouping]="false" [showButtons]="true" inputId="g1">
+                               [useGrouping]="false" [showButtons]="true" inputId="y1">
                 </p-inputNumber>
               </div>
               <div class="field" [class.locked]="!editing()">
-                <div class="label">Semester 2 *</div>
-                <p-inputNumber formControlName="semester2Grade"
+                <div class="label">Second Year *</div>
+                <p-inputNumber formControlName="secondYearGrade"
                                mode="decimal" [min]="0" [max]="20" [step]="0.01"
                                locale="fr-FR" [minFractionDigits]="0" [maxFractionDigits]="2"
-                               [useGrouping]="false" [showButtons]="true" inputId="g2">
+                               [useGrouping]="false" [showButtons]="true" inputId="y2">
                 </p-inputNumber>
               </div>
               <div class="field" [class.locked]="!editing()">
-                <div class="label">Semester 3</div>
-                <p-inputNumber formControlName="semester3Grade"
+                <div class="label">Third Year</div>
+                <p-inputNumber formControlName="thirdYearGrade"
                                mode="decimal" [min]="0" [max]="20" [step]="0.01"
                                locale="fr-FR" [minFractionDigits]="0" [maxFractionDigits]="2"
-                               [useGrouping]="false" [showButtons]="true" inputId="g3">
+                               [useGrouping]="false" [showButtons]="true" inputId="y3">
                 </p-inputNumber>
               </div>
               <div class="field" [class.locked]="!editing()">
-                <div class="label">Semester 4</div>
-                <p-inputNumber formControlName="semester4Grade"
+                <div class="label">Fourth Year</div>
+                <p-inputNumber formControlName="fourthYearGrade"
                                mode="decimal" [min]="0" [max]="20" [step]="0.01"
                                locale="fr-FR" [minFractionDigits]="0" [maxFractionDigits]="2"
-                               [useGrouping]="false" [showButtons]="true" inputId="g4">
-                </p-inputNumber>
-              </div>
-              <div class="field" [class.locked]="!editing()">
-                <div class="label">Semester 5</div>
-                <p-inputNumber formControlName="semester5Grade"
-                               mode="decimal" [min]="0" [max]="20" [step]="0.01"
-                               locale="fr-FR" [minFractionDigits]="0" [maxFractionDigits]="2"
-                               [useGrouping]="false" [showButtons]="true" inputId="g5">
+                               [useGrouping]="false" [showButtons]="true" inputId="y4">
                 </p-inputNumber>
               </div>
             </div>
@@ -395,12 +387,11 @@ export class StudentProfilePageComponent implements OnInit {
     mobilityStart: <Date | null>(null),
     mobilityEnd: <Date | null>(null),
 
-    // grades
-    semester1Grade: <any>[null, [Validators.required, Validators.min(0), Validators.max(20)]],
-    semester2Grade: <any>[null, [Validators.required, Validators.min(0), Validators.max(20)]],
-    semester3Grade: <any>[null, [Validators.min(0), Validators.max(20)]],
-    semester4Grade: <any>[null, [Validators.min(0), Validators.max(20)]],
-    semester5Grade: <any>[null, [Validators.min(0), Validators.max(20)]]
+    // === Year-based grades (NEW) ===
+    firstYearGrade:  <any>[null, [Validators.required, Validators.min(0), Validators.max(20)]],
+    secondYearGrade: <any>[null, [Validators.required, Validators.min(0), Validators.max(20)]],
+    thirdYearGrade:  <any>[null, [Validators.min(0), Validators.max(20)]],
+    fourthYearGrade: <any>[null, [Validators.min(0), Validators.max(20)]]
   });
 
   filteredOptionCodes = computed(() => {
@@ -464,12 +455,11 @@ export class StudentProfilePageComponent implements OnInit {
     setIfDirty('mobilityStart',           'mobilityStart',           v.mobilityStart ? this.ymd(v.mobilityStart as Date) : null);
     setIfDirty('mobilityEnd',             'mobilityEnd',             v.mobilityEnd ? this.ymd(v.mobilityEnd as Date) : null);
 
-    // grades
-    setIfDirty('semester1Grade', 'semester1Grade', typeof v.semester1Grade === 'number' ? v.semester1Grade : null);
-    setIfDirty('semester2Grade', 'semester2Grade', typeof v.semester2Grade === 'number' ? v.semester2Grade : null);
-    setIfDirty('semester3Grade', 'semester3Grade', typeof v.semester3Grade === 'number' ? v.semester3Grade : null);
-    setIfDirty('semester4Grade', 'semester4Grade', typeof v.semester4Grade === 'number' ? v.semester4Grade : null);
-    setIfDirty('semester5Grade', 'semester5Grade', typeof v.semester5Grade === 'number' ? v.semester5Grade : null);
+    // === Year-based grades (NEW) ===
+    setIfDirty('firstYearGrade',  'firstYearGrade',  typeof v.firstYearGrade  === 'number' ? v.firstYearGrade  : null);
+    setIfDirty('secondYearGrade', 'secondYearGrade', typeof v.secondYearGrade === 'number' ? v.secondYearGrade : null);
+    setIfDirty('thirdYearGrade',  'thirdYearGrade',  typeof v.thirdYearGrade  === 'number' ? v.thirdYearGrade  : null);
+    setIfDirty('fourthYearGrade', 'fourthYearGrade', typeof v.fourthYearGrade === 'number' ? v.fourthYearGrade : null);
 
     this.api.updateMe(payload).subscribe({
       next: (res) => {
@@ -539,12 +529,11 @@ export class StudentProfilePageComponent implements OnInit {
       mobilityStart: me.mobilityStart ? new Date(me.mobilityStart) : null,
       mobilityEnd: me.mobilityEnd ? new Date(me.mobilityEnd) : null,
 
-      // grades
-      semester1Grade: me.semester1Grade ?? null,
-      semester2Grade: me.semester2Grade ?? null,
-      semester3Grade: me.semester3Grade ?? null,
-      semester4Grade: me.semester4Grade ?? null,
-      semester5Grade: me.semester5Grade ?? null
+      // === Year-based grades (NEW) ===
+      firstYearGrade:  me.firstYearGrade ?? null,
+      secondYearGrade: me.secondYearGrade ?? null,
+      thirdYearGrade:  me.thirdYearGrade ?? null,
+      fourthYearGrade: me.fourthYearGrade ?? null
     });
   }
 

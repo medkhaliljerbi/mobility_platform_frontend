@@ -160,6 +160,34 @@ const DEFAULT_FORM_FIELDS = [
             </div>
           </div>
 
+          <!-- NEW: University & Contact Snapshot -->
+          <div class="grid-2">
+            <div class="field">
+              <span class="label">University Name *</span>
+              <input pInputText formControlName="universityName"/>
+            </div>
+            <div class="field">
+              <span class="label">Country Code (ISO-2)</span>
+              <input pInputText formControlName="countryCode" placeholder="e.g., TN, FR"/>
+            </div>
+          </div>
+
+          <div class="field">
+            <span class="label">Address</span>
+            <input pInputText formControlName="addressLine"/>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <span class="label">Contact Email</span>
+              <input pInputText formControlName="contactEmail" type="email"/>
+            </div>
+            <div class="field">
+              <span class="label">Contact Phone</span>
+              <input pInputText formControlName="contactPhone" placeholder="+216..."/>
+            </div>
+          </div>
+
           <div class="field">
             <span class="label">Offer Image</span>
             <div class="image">
@@ -213,6 +241,13 @@ export class OfferCreatePageComponent implements OnInit {
     deadline:       <Date | null>(null),
     type:           <OfferType | null>(null),
     targetYear:     <TargetYear | null>(null),
+
+    // NEW fields
+    universityName: ['', Validators.required],
+    countryCode:    [''],
+    addressLine:    [''],
+    contactEmail:   ['', Validators.email],
+    contactPhone:   [''],
   });
 
   ngOnInit(): void {}
@@ -264,6 +299,13 @@ export class OfferCreatePageComponent implements OnInit {
       topicTags: this.topicTags(),                             // <- array -> jsonb
       requiredDocs: this.requiredDocs(),                       // <- array -> jsonb
       formJson: this.buildFormJson(this.formFields()),         // <- object -> jsonb
+
+      // NEW snapshot fields
+      universityName: v.universityName,
+      countryCode: v.countryCode || null,
+      addressLine: v.addressLine || null,
+      contactEmail: v.contactEmail || null,
+      contactPhone: v.contactPhone || null,
     };
 
     this.srv.createOffer(payload).subscribe({
@@ -272,14 +314,14 @@ export class OfferCreatePageComponent implements OnInit {
         if (!img) {
           this.toast.add({severity:'success', summary:'Offer created'});
           this.busy.set(false);
-          this.router.navigate(['/offers', created.id]);
+          this.router.navigate(['/offers/list', created.id]);
           return;
         }
         this.srv.uploadOfferImage(created.id!, img).subscribe({
           next: () => {
             this.toast.add({severity:'success', summary:'Offer created with image'});
             this.busy.set(false);
-            this.router.navigate(['/offers', created.id]);
+            this.router.navigate(['/offers/list', created.id]);
           },
           error: (err) => { this.busy.set(false); this.toast.add({severity:'warn', summary:'Offer ok (image failed)', detail: this.err(err)}); }
         });

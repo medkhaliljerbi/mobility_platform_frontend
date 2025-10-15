@@ -74,20 +74,18 @@ type OfferStatus = 'OPEN' | 'CLOSED';
       padding:.2rem .55rem; border-radius:9999px; background:var(--surface-200); font-size:.85rem;
     }
 
-    /* bottom-right actions row */
     .panel-actions{
       margin-top:1rem;
       display:flex;
       gap:.5rem;
       justify-content:flex-end;
-      position:relative; /* anchor for local popup */
+      position:relative;
     }
 
-    /* local confirmation card */
     .confirm-pop{
       position:absolute;
       right:0;
-      bottom:2.75rem; /* appears above the buttons */
+      bottom:2.75rem;
       width:260px;
       background:var(--surface-0);
       border:1px solid var(--surface-300, #e5e7eb);
@@ -125,6 +123,10 @@ type OfferStatus = 'OPEN' | 'CLOSED';
                 <div class="meta-chips">
                   <span class="chip">Seats: <strong>{{ seatsOf(o) ?? '—' }}</strong></span>
                   <span class="chip">Deadline: <strong>{{ dateOnly(o.deadline) }}</strong></span>
+
+                  <!-- NEW: show snapshot fields when present -->
+                  <span class="chip" *ngIf="o.universityName">University: <strong>{{ o.universityName }}</strong></span>
+                  <span class="chip" *ngIf="o.countryCode">Country: <strong>{{ o.countryCode }}</strong></span>
                 </div>
               </div>
 
@@ -162,9 +164,20 @@ type OfferStatus = 'OPEN' | 'CLOSED';
                   </div>
                 </div>
 
+                <!-- NEW: University & Contact snapshot details -->
+                <div class="block" *ngIf="o.universityName || o.addressLine || o.contactEmail || o.contactPhone">
+                  <div class="block-title">University & Contact</div>
+                  <div class="chips">
+                    <span class="chip-pill" *ngIf="o.universityName">University: {{ o.universityName }}</span>
+                    <span class="chip-pill" *ngIf="o.countryCode">Country: {{ o.countryCode }}</span>
+                    <span class="chip-pill" *ngIf="o.addressLine">Address: {{ o.addressLine }}</span>
+                    <span class="chip-pill" *ngIf="o.contactEmail">Email: {{ o.contactEmail }}</span>
+                    <span class="chip-pill" *ngIf="o.contactPhone">Phone: {{ o.contactPhone }}</span>
+                  </div>
+                </div>
+
                 <!-- Bottom-right buttons -->
                 <div class="panel-actions">
-                  <!-- inline confirm -->
                   <div class="confirm-pop" *ngIf="o['_askDelete']">
                     <div class="confirm-title">Delete offer?</div>
                     <div class="text-color-secondary text-sm">{{ o.title }}</div>
@@ -244,13 +257,10 @@ export class OfferListComponent implements OnInit {
   trackById = (_: number, o: OfferView) => o.id;
   trackByIndex = (i: number) => i;
 
-  /* ----- actions ----- */
-
   updateItem(o: OfferView){
     this.router.navigate(['/pages/offer/update', o.id]);
   }
 
-  /** show local inline confirmation */
   askDelete(o: OfferView){
     (o as any)['_askDelete'] = true;
   }
@@ -265,7 +275,6 @@ export class OfferListComponent implements OnInit {
         this.offers = this.offers.filter(x => x.id !== o.id);
       },
       error: (e) => {
-        // fallback inline error; no alert()
         console.error('Failed to delete', e);
         (o as any)['_askDelete'] = false;
       }

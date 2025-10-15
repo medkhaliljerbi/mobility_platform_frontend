@@ -11,8 +11,8 @@ export interface StudentSelfView {
   firstName: string;
   middleName: string | null;
   lastName: string;
-  studentIdentifier: string | null; // only for SORTANT
-  type: StudentType;                // NEW
+  studentIdentifier: string | null;
+  type: 'SORTANT' | 'ENTRANT';
 
   // contact
   emailPersonnel: string | null;
@@ -25,10 +25,9 @@ export interface StudentSelfView {
   avatarUrl?: string | null;
   photoObjectKey?: string | null;
 
-  // SORTANT (EspritEnrollment)
+  // SORTANT
   entryDate: string | null;
   expectedExitDate: string | null;
-
   field: 'IT' | 'TELECOM' | 'GC' | 'EM' | null;
   optionCode:
     | 'ERP_BI' | 'ARCTIC' | 'SAE' | 'SIM' | 'INFINI' | 'DS' | 'SE' | 'TWIN' | 'IA' | 'NIDS' | 'GAMIX' | 'DATA_IT' | 'SLEAM'
@@ -36,24 +35,22 @@ export interface StudentSelfView {
     | 'SO' | 'PC' | 'RN2E'
     | 'MECATRONIQUE' | 'OGI'
     | null;
-
   currentClass: string | null;
 
-  // ENTRANT (IncomingMobility) — NEW
+  // ENTRANT
   homeUniversityName?: string | null;
   homeUniversityCountry?: string | null;
   homeDepartmentOrProgram?: string | null;
   nominationReference?: string | null;
   contactEmail?: string | null;
-  mobilityStart?: string | null; // yyyy-MM-dd
-  mobilityEnd?: string | null;   // yyyy-MM-dd
+  mobilityStart?: string | null;
+  mobilityEnd?: string | null;
 
-  // grades
-  semester1Grade: number | null;
-  semester2Grade: number | null;
-  semester3Grade: number | null;
-  semester4Grade: number | null;
-  semester5Grade: number | null;
+  // === Year-based grades (NEW) ===
+  firstYearGrade: number | null;
+  secondYearGrade: number | null;
+  thirdYearGrade: number | null;
+  fourthYearGrade: number | null;
 }
 
 export interface StudentSelfUpdate {
@@ -63,14 +60,14 @@ export interface StudentSelfUpdate {
   personnelPhoneNumber?: string | null;
   domicilePhoneNumber?: string | null;
 
-  // SORTANT (EspritEnrollment)
+  // SORTANT
   field?: StudentSelfView['field'];
   optionCode?: StudentSelfView['optionCode'];
   currentClass?: string | null;
   entryDate?: string | null;
   expectedExitDate?: string | null;
 
-  // ENTRANT (IncomingMobility) — NEW
+  // ENTRANT
   homeUniversityName?: string | null;
   homeUniversityCountry?: string | null;
   homeDepartmentOrProgram?: string | null;
@@ -79,16 +76,16 @@ export interface StudentSelfUpdate {
   mobilityStart?: string | null;
   mobilityEnd?: string | null;
 
-  // grades
-  semester1Grade?: number | null;
-  semester2Grade?: number | null;
-  semester3Grade?: number | null;
-  semester4Grade?: number | null;
-  semester5Grade?: number | null;
+  // === Year-based grades (NEW) ===
+  firstYearGrade?: number | null;
+  secondYearGrade?: number | null;
+  thirdYearGrade?: number | null;
+  fourthYearGrade?: number | null;
 
   // photo
   photoObjectKey?: string | null;
 }
+
 
 @Injectable({ providedIn: 'root' })
 export class StudentService {

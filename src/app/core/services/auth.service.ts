@@ -125,7 +125,8 @@ export class AuthService {
     localStorage.removeItem('user_active');
     localStorage.removeItem('user_role'); // clear persisted role
   }
-    /** Forgot password: sends a recovery email (backend always 204) */
+
+  /** Forgot password: sends a recovery email (backend always 204) */
   forgotPassword(email: string): Observable<void> {
     return this.http.post<void>(
       `${this.base}/password/forgot`,
@@ -133,7 +134,8 @@ export class AuthService {
       { headers: this.json }
     );
   }
-    /** Preview token -> validate before showing reset form */
+
+  /** Preview token -> validate before showing reset form */
   previewResetToken(token: string): Observable<{ valid: boolean; email?: string }> {
     const params = new HttpParams().set('token', token);
     return this.http.get<{ valid: boolean; email?: string }>(`${this.base}/password/preview`, { params });
@@ -147,5 +149,19 @@ export class AuthService {
       { newPassword },
       { headers: this.json, params }
     );
+  }
+
+  // auth.service.ts
+  currentRole(): string | null {
+    return (localStorage.getItem('user_role') || '').toUpperCase() || null;
+  }
+  isActive(): boolean {
+    return localStorage.getItem('user_active') === 'true';
+  }
+  hasToken(): boolean {
+    return !!localStorage.getItem('auth_token');
+  }
+  currentUser() { // optional convenience
+    return { role: this.currentRole(), active: this.isActive(), token: this.hasToken() };
   }
 }

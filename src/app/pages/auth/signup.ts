@@ -16,7 +16,8 @@ import { MessageService } from 'primeng/api';
 
 import { RouterModule } from '@angular/router';
 import { AppFloatingConfigurator } from '../../layout/component/app.floatingconfigurator';
-import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { HttpClientModule } from '@angular/common/http';
+import { AuthService } from 'src/app/core/services/auth.service';
 
 /** Backend enums – use exact enum names your server expects */
 type Role =
@@ -42,7 +43,7 @@ interface SignupFormModel {
   lastName: string;
   email: string;
   personalEmail: string | null;
-  role: Role | '' ;
+  role: Role | '';
   password: string;
   maritalStatus: string | null;
   personnelPhoneNumber: string;
@@ -96,7 +97,7 @@ interface SignupFormModel {
     RippleModule,
     DialogModule,
     DividerModule,
-    DatePickerModule,   // ✅ new DatePicker
+    DatePickerModule,
     SelectModule,
     MultiSelectModule,
     ButtonModule,
@@ -218,10 +219,19 @@ interface SignupFormModel {
                 <ng-container *ngIf="m.role === 'STUDENT'">
 
                   <div class="md:col-span-2">
-                    <label class="block text-sm mb-2">Student Type</label>
-                    <p-select name="type" [(ngModel)]="m.type" [options]="studentTypeOptions"
-                              optionLabel="label" optionValue="value" placeholder="Select type" appendTo="body" class="w-full">
+                    <label class="block text-sm mb-2">Student Type *</label>
+                    <p-select name="type"
+                              [(ngModel)]="m.type"
+                              [options]="studentTypeOptions"
+                              optionLabel="label"
+                              optionValue="value"
+                              placeholder="Select type"
+                              appendTo="body"
+                              class="w-full"
+                              required
+                              #stype="ngModel">
                     </p-select>
+                    <small class="err" *ngIf="invalid(stype)">Student type is required.</small>
                   </div>
 
                   <!-- SORTANT (Esprit student) -->
@@ -362,7 +372,7 @@ interface SignupFormModel {
   `]
 })
 export class Signup {
-  constructor(private http: HttpClient, private toast: MessageService) {}
+  constructor(private auth: AuthService, private toast: MessageService) {}
 
   // role & other option lists
   roleOptions = [
@@ -414,9 +424,15 @@ export class Signup {
       return;
     }
 
+    // 🔒 extra guard: if Student, require type
+    if (this.m.role === 'STUDENT' && !this.m.type) {
+      this.toast.add({severity:'warn', summary:'Validation', detail:'Please choose Student Type (Entrant/Sortant).'});
+      return;
+    }
+
     const payload = this.toPayload(this.m);
 
-    this.http.post('/api/auth/signup', payload).subscribe({
+    this.auth.signup(payload).subscribe({
       next: () => {
         this.toast.add({severity:'success', summary:'Success', detail:'User registered successfully!'});
         this.resetForm(f);
@@ -475,7 +491,7 @@ export class Signup {
     const m = `${d.getMonth()+1}`.padStart(2,'0');
     const day = `${d.getDate()}`.padStart(2,'0');
     return `${y}-${m}-${day}`;
-    }
+  }
 
   /** Build request object exactly like your SignupRequest (nulls for optional/irrelevant) */
   private toPayload(m: SignupFormModel) {
