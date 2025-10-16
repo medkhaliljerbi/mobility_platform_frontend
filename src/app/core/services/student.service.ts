@@ -1,7 +1,24 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
+
+export type CertificateLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'PROFESSIONAL';
+
+export interface Certificate {
+  id: number;
+  name: string;
+  topics: string[];
+  level: CertificateLevel;
+  fileName: string;
+  fileObjectKey?: string | null;
+}
+
+export interface ProfileDocument {
+  id: number;
+  fileName: string;
+  fileObjectKey?: string | null;
+}
 
 export type StudentType = 'SORTANT' | 'ENTRANT';
 
@@ -129,4 +146,90 @@ export class StudentService {
   deleteAvatar(): Observable<StudentSelfView> {
     return this.updateMe({ photoObjectKey: null });
   }
+// ===== Certificates =====
+listCertificates() {
+  return this.http.get<Certificate[]>(`${this.profileUrl}/files/certificates`, this.opts());
+}
+
+// create
+createCertificate(file: File, name: string, topics: string[], level: CertificateLevel) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('name', name);
+  (topics ?? []).forEach(t => form.append('topics', t));       // ← repeat
+  form.append('level', String(level));
+  return this.http.post<Certificate>(`${this.profileUrl}/files/certificates`, form, this.opts());
+}
+
+// update info (PATCH)
+updateCertificateInfo(id: number, params: { name?: string; topics?: string[]; level?: CertificateLevel }) {
+  let httpParams = new HttpParams();
+  if (params.name  != null) httpParams = httpParams.set('name', params.name);
+  if (params.level != null) httpParams = httpParams.set('level', String(params.level));
+  (params.topics ?? []).forEach(t => httpParams = httpParams.append('topics', t));   // ← repeat
+  return this.http.patch<Certificate>(`${this.profileUrl}/files/certificates/${id}`, null, {
+    ...this.opts(),
+    params: httpParams,
+  });
+}
+
+
+replaceCertificateFile(id: number, file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return this.http.post<Certificate>(`${this.profileUrl}/files/certificates/${id}/file`, form, this.opts());
+}
+
+deleteCertificate(id: number) {
+  return this.http.delete<void>(`${this.profileUrl}/files/certificates/${id}`, this.opts());
+}
+
+presignCertificateUrl(id: number) {
+  return this.http.get(`${this.profileUrl}/files/certificates/${id}/url`, {
+    ...this.opts(),
+    responseType: 'text',
+  });
+}
+countCertificates() {
+  return this.http.get<number>(`${this.profileUrl}/files/certificates/count`, this.opts());
+}
+// ===== Documents =====
+listDocuments() {
+  return this.http.get<ProfileDocument[]>(`${this.profileUrl}/files/documents`, this.opts());
+}
+
+// replace your current createDocument(...)
+createDocument(file: File, name: string) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('name', name);
+  return this.http.post<ProfileDocument>(`${this.profileUrl}/files/documents`, form, this.opts());
+}
+
+
+renameDocument(id: number, fileName: string) {
+  const params = new HttpParams({ fromObject: { fileName } });
+  return this.http.patch<ProfileDocument>(`${this.profileUrl}/files/documents/${id}`, null, {
+    ...this.opts(),
+    params,
+  });
+}
+
+replaceDocumentFile(id: number, file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return this.http.post<ProfileDocument>(`${this.profileUrl}/files/documents/${id}/file`, form, this.opts());
+}
+
+deleteDocument(id: number) {
+  return this.http.delete<void>(`${this.profileUrl}/files/documents/${id}`, this.opts());
+}
+
+presignDocumentUrl(id: number) {
+  return this.http.get(`${this.profileUrl}/files/documents/${id}/url`, {
+    ...this.opts(),
+    responseType: 'text',
+  });
+}
+
 }
