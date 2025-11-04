@@ -13,40 +13,91 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { SelectModule } from 'primeng/select';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import {
+  OfferService,
+  OfferCreatePayload,
+  OfferType,
+  TargetYear
+} from '@/core/services/offer.service';
 
-import { OfferService, OfferCreatePayload, OfferType, TargetYear } from '@/core/services/offer.service';
+import { AuthService } from '@/core/services/auth.service'; // <-- ADD THIS
 
 const OFFER_TYPE_OPTS = [
-  { label: 'Exchange', value: 'EXCHANGE' as OfferType },
-  { label: 'Double Degree', value: 'DOUBLE_DEGREE' as OfferType },
-  { label: 'Master', value: 'MASTERS' as OfferType }, // <- backend enum expects MASTERS
+  { label: 'Exchange',       value: 'EXCHANGE' as OfferType },
+  { label: 'Double Degree',  value: 'DOUBLE_DEGREE' as OfferType },
+  { label: 'Master',         value: 'MASTERS' as OfferType }
 ];
 
 const TARGET_YEAR_OPTS = [
   { label: '4th Year', value: 'FOURTH' as TargetYear },
-  { label: '5th Year', value: 'FIFTH' as TargetYear },
+  { label: '5th Year', value: 'FIFTH'  as TargetYear },
 ];
 
-const DEFAULT_FORM_FIELDS = [
-  'Email',
-  'Last Name',
-  'First Name',
-  'Email (esprit.tn)',
-  'Email (personal)',
-  'Civility',
-  'Phone Number',
-  'Grade – 3rd Year (main session)',
-  'Grade – 4th Year (main session)',
-  'Grade – 5th Year (main session)',
-];
+// core identity/order
+function baseCoreFields(): string[] {
+  return [
+    'Esprit ID',
+    'Class',
+    'First Name',
+    'Middle Name',
+    'Last Name',
+    'Email (esprit.tn)',
+    'Email (personal)',
+    'Phone Number',
+    'Civility'
+  ];
+}
+
+// grade fields depend on targetYear
+function gradeFieldsForYear(targetYear: TargetYear | null | undefined): string[] {
+  const baseGrades = [
+    'Grade – 1st Year (main session)',
+    'Grade – 2nd Year (main session)',
+    'Grade – 3rd Year (main session)',
+  ];
+
+  if (targetYear === 'FOURTH') {
+    // 4th years haven't finished 4th yet -> stop at Y3
+    return baseGrades;
+  }
+
+  if (targetYear === 'FIFTH') {
+    // 5th-year candidates also expose 4th + 5th
+    return [
+      ...baseGrades,
+      'Grade – 4th Year (main session)',
+      'Grade – 5th Year (main session)',
+    ];
+  }
+
+  return baseGrades;
+}
+
+// default list = identity block + grades block
+function defaultFieldsFor(targetYear: TargetYear | null | undefined): string[] {
+  return [
+    ...baseCoreFields(),
+    ...gradeFieldsForYear(targetYear)
+  ];
+}
 
 @Component({
   selector: 'app-offer-create-page',
   standalone: true,
   imports: [
-    CommonModule, ReactiveFormsModule, FormsModule, HttpClientModule,
-    FluidModule, CardModule, ButtonModule, InputTextModule,
-    InputNumberModule, DatePickerModule, SelectModule, ToastModule
+    CommonModule,
+    ReactiveFormsModule,
+    FormsModule,
+    HttpClientModule,
+    FluidModule,
+    CardModule,
+    ButtonModule,
+    InputTextModule,
+    InputNumberModule,
+    DatePickerModule,
+    SelectModule,
+    ToastModule,ToggleSwitchModule
   ],
   providers: [MessageService],
   styles: [`
@@ -58,14 +109,25 @@ const DEFAULT_FORM_FIELDS = [
     @media (max-width:720px){.grid-2{grid-template-columns:1fr}}
 
     .chips{display:flex;flex-wrap:wrap;gap:.4rem}
-    .chip{display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .5rem;border-radius:9999px;background:var(--surface-200);font-size:.85rem}
+    .chip{
+      display:inline-flex;align-items:center;gap:.35rem;
+      padding:.25rem .5rem;border-radius:9999px;
+      background:var(--surface-200);font-size:.85rem
+    }
     .chip button{border:none;background:transparent;cursor:pointer}
-    .chip-input{display:flex;gap:.5rem;align-items:center}
+    .chip-input{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
     .chip-input input{min-width:220px}
 
-    .image{width:100%;aspect-ratio:16/9;border:1px dashed var(--surface-300);border-radius:.5rem;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;margin-top:.5rem}
+    .image{
+      width:100%;aspect-ratio:16/9;border:1px dashed var(--surface-300);
+      border-radius:.5rem;display:flex;align-items:center;justify-content:center;
+      position:relative;overflow:hidden;margin-top:.5rem
+    }
     .image img{width:100%;height:100%;object-fit:cover;display:block}
-    .image .overlay{position:absolute;inset:0;background:rgba(0,0,0,.5);opacity:0;display:flex;align-items:center;justify-content:center;gap:.5rem}
+    .image .overlay{
+      position:absolute;inset:0;background:rgba(0,0,0,.5);opacity:0;
+      display:flex;align-items:center;justify-content:center;gap:.5rem
+    }
     .image:hover .overlay{opacity:1}
     textarea.p-inputtextarea{min-height:6rem}
   `],
@@ -75,10 +137,15 @@ const DEFAULT_FORM_FIELDS = [
     <div class="shell">
       <p-card>
         <ng-template pTemplate="title">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between flex-wrap gap-2">
             <span class="font-bold text-lg">Create Offer</span>
-            <button pButton label="Save" icon="pi pi-check"
-                    (click)="onSave()" [disabled]="form.invalid || busy()"></button>
+            <button
+              pButton
+              label="Save"
+              icon="pi pi-check"
+              (click)="onSave()"
+              [disabled]="form.invalid || busy()"
+            ></button>
           </div>
         </ng-template>
 
@@ -92,43 +159,87 @@ const DEFAULT_FORM_FIELDS = [
 
             <div class="field">
               <span class="label">Seats *</span>
-              <!-- IMPORTANT: binds to availableSlots, which the backend expects -->
-              <p-inputNumber formControlName="availableSlots" [min]="1" [max]="1000" [useGrouping]="false" [showButtons]="true"></p-inputNumber>
+              <p-inputNumber
+                formControlName="availableSlots"
+                [min]="1"
+                [max]="1000"
+                [useGrouping]="false"
+                [showButtons]="true">
+              </p-inputNumber>
             </div>
           </div>
 
           <div class="field">
             <span class="label">Description *</span>
-            <textarea class="p-inputtext p-inputtextarea" rows="6" formControlName="description"></textarea>
+            <textarea
+              class="p-inputtext p-inputtextarea"
+              rows="6"
+              formControlName="description">
+            </textarea>
           </div>
 
           <div class="grid-2">
             <div class="field">
               <span class="label">Deadline *</span>
-              <p-datepicker formControlName="deadline" dateFormat="yy-mm-dd"></p-datepicker>
+              <p-datepicker
+                formControlName="deadline"
+                dateFormat="yy-mm-dd">
+              </p-datepicker>
             </div>
+
             <div class="field">
               <span class="label">Offer Type *</span>
-              <p-select formControlName="type" [options]="offerTypeOptions" optionLabel="label" optionValue="value"></p-select>
+              <p-select
+                formControlName="type"
+                [options]="offerTypeOptions"
+                optionLabel="label"
+                optionValue="value">
+              </p-select>
             </div>
           </div>
 
           <div class="grid-2">
             <div class="field">
               <span class="label">Target Year *</span>
-              <p-select formControlName="targetYear" [options]="targetYearOptions" optionLabel="label" optionValue="value"></p-select>
+              <p-select
+                formControlName="targetYear"
+                [options]="targetYearOptions"
+                optionLabel="label"
+                optionValue="value"
+                (onChange)="onTargetYearChange()">
+              </p-select>
             </div>
-
+<div class="field" *ngIf="true">
+  <span class="label">Esprit Program</span>
+<p-toggleswitch formControlName="esprit"></p-toggleswitch>
+</div>
             <div class="field">
               <span class="label">Topic Tags</span>
               <div class="chips">
                 <span class="chip" *ngFor="let t of topicTags(); let i=index">
-                  {{t}} <button type="button" (click)="removeTopicTag(i)" title="remove"><i class="pi pi-times"></i></button>
+                  {{t}}
+                  <button
+                    type="button"
+                    (click)="removeTopicTag(i)"
+                    title="remove">
+                    <i class="pi pi-times"></i>
+                  </button>
                 </span>
               </div>
               <div class="chip-input">
-                <input pInputText [(ngModel)]="topicDraft" [ngModelOptions]="{standalone:true}" (keyup.enter)="addTopicTag()" placeholder="type tag then Enter"/>
-                <button pButton type="button" icon="pi pi-plus" class="p-button-sm" (click)="addTopicTag()"></button>
+                <input
+                  pInputText
+                  [(ngModel)]="topicDraft"
+                  [ngModelOptions]="{standalone:true}"
+                  (keyup.enter)="addTopicTag()"
+                  placeholder="type tag then Enter"/>
+                <button
+                  pButton
+                  type="button"
+                  icon="pi pi-plus"
+                  class="p-button-sm"
+                  (click)="addTopicTag()">
+                </button>
               </div>
             </div>
           </div>
@@ -137,30 +248,70 @@ const DEFAULT_FORM_FIELDS = [
             <span class="label">Required Documents</span>
             <div class="chips">
               <span class="chip" *ngFor="let d of requiredDocs(); let i=index">
-                {{d}} <button type="button" (click)="removeRequiredDoc(i)" title="remove"><i class="pi pi-times"></i></button>
+                {{d}}
+                <button
+                  type="button"
+                  (click)="removeRequiredDoc(i)"
+                  title="remove">
+                  <i class="pi pi-times"></i>
+                </button>
               </span>
             </div>
             <div class="chip-input">
-              <input pInputText [(ngModel)]="docDraft" [ngModelOptions]="{standalone:true}" (keyup.enter)="addRequiredDoc()" placeholder="type label then Enter"/>
-              <button pButton type="button" icon="pi pi-plus" class="p-button-sm" (click)="addRequiredDoc()"></button>
+              <input
+                pInputText
+                [(ngModel)]="docDraft"
+                [ngModelOptions]="{standalone:true}"
+                (keyup.enter)="addRequiredDoc()"
+                placeholder="type label then Enter"/>
+              <button
+                pButton
+                type="button"
+                icon="pi pi-plus"
+                class="p-button-sm"
+                (click)="addRequiredDoc()">
+              </button>
             </div>
           </div>
 
           <div class="field">
-            <span class="label">Application Form (fields)</span>
+            <span class="label">Application Form (fields in order)</span>
             <div class="chips">
               <span class="chip" *ngFor="let f of formFields(); let i=index">
-                {{f}} <button type="button" (click)="removeFormField(i)" title="remove"><i class="pi pi-times"></i></button>
+                {{f}}
+                <button
+                  type="button"
+                  (click)="removeFormField(i)"
+                  title="remove">
+                  <i class="pi pi-times"></i>
+                </button>
               </span>
             </div>
             <div class="chip-input">
-              <input pInputText [(ngModel)]="fieldDraft" [ngModelOptions]="{standalone:true}" (keyup.enter)="addFormField()" placeholder="add field then Enter"/>
-              <button pButton type="button" icon="pi pi-plus" class="p-button-sm" (click)="addFormField()"></button>
-              <button pButton type="button" label="Reset to defaults" class="p-button-text p-button-sm" (click)="resetDefaults()"></button>
+              <input
+                pInputText
+                [(ngModel)]="fieldDraft"
+                [ngModelOptions]="{standalone:true}"
+                (keyup.enter)="addFormField()"
+                placeholder="add field then Enter"/>
+              <button
+                pButton
+                type="button"
+                icon="pi pi-plus"
+                class="p-button-sm"
+                (click)="addFormField()">
+              </button>
+
+              <button
+                pButton
+                type="button"
+                label="Reset to defaults"
+                class="p-button-text p-button-sm"
+                (click)="resetDefaults()">
+              </button>
             </div>
           </div>
 
-          <!-- NEW: University & Contact Snapshot -->
           <div class="grid-2">
             <div class="field">
               <span class="label">University Name *</span>
@@ -198,10 +349,26 @@ const DEFAULT_FORM_FIELDS = [
                 <div class="text-sm text-color-secondary">No image selected</div>
               </ng-template>
               <div class="overlay">
-                <button pButton icon="pi pi-upload" (click)="fileInput.nativeElement.click()" class="p-button-rounded p-button-sm"></button>
-                <button pButton icon="pi pi-times" class="p-button-rounded p-button-danger p-button-sm" (click)="removeImage()" [disabled]="!file()"></button>
+                <button
+                  pButton
+                  icon="pi pi-upload"
+                  (click)="fileInput.nativeElement.click()"
+                  class="p-button-rounded p-button-sm">
+                </button>
+                <button
+                  pButton
+                  icon="pi pi-times"
+                  class="p-button-rounded p-button-danger p-button-sm"
+                  (click)="removeImage()"
+                  [disabled]="!file()">
+                </button>
               </div>
-              <input #fileRef type="file" accept="image/*" hidden (change)="onPickImage($event)" />
+              <input
+                #fileRef
+                type="file"
+                accept="image/*"
+                hidden
+                (change)="onPickImage($event)" />
             </div>
           </div>
 
@@ -217,96 +384,178 @@ const DEFAULT_FORM_FIELDS = [
 export class OfferCreatePageComponent implements OnInit {
   @ViewChild('fileRef') fileInput!: ElementRef<HTMLInputElement>;
 
-  private fb = inject(FormBuilder);
-  private srv = inject(OfferService);
+  private fb    = inject(FormBuilder);
+  private srv   = inject(OfferService);
   private toast = inject(MessageService);
-  private router = inject(Router);
+  private router= inject(Router);
+  private auth  = inject(AuthService);           // <-- ADD
 
-  busy = signal(false);
-  file = signal<File | null>(null);
+  busy    = signal(false);
+  file    = signal<File | null>(null);
   preview = signal<string | null>(null);
 
-  offerTypeOptions = OFFER_TYPE_OPTS;
-  targetYearOptions = TARGET_YEAR_OPTS;
+  offerTypeOptions   = OFFER_TYPE_OPTS;
+  targetYearOptions  = TARGET_YEAR_OPTS;
 
-  topicDraft = '';   docDraft = '';   fieldDraft = '';
-  topicTags = signal<string[]>([]);
+  topicDraft = '';
+  docDraft   = '';
+  fieldDraft = '';
+
+  topicTags    = signal<string[]>([]);
   requiredDocs = signal<string[]>([]);
-  formFields = signal<string[]>([...DEFAULT_FORM_FIELDS]);
+  formFields   = signal<string[]>([]); // we fill this in ngOnInit
 
-  form = this.fb.group({
+ form = this.fb.group({
     title:          ['', Validators.required],
     description:    ['', Validators.required],
-    availableSlots: [1, [Validators.required, Validators.min(1)]], // <- renamed
+    availableSlots: [1, [Validators.required, Validators.min(1)]],
     deadline:       <Date | null>(null),
     type:           <OfferType | null>(null),
     targetYear:     <TargetYear | null>(null),
 
-    // NEW fields
     universityName: ['', Validators.required],
     countryCode:    [''],
     addressLine:    [''],
     contactEmail:   ['', Validators.email],
     contactPhone:   [''],
+
+    esprit:         [false],
   });
 
-  ngOnInit(): void {}
+ngOnInit(): void {
+    const roleRaw = (this.auth.currentRole() || '').toUpperCase();
+    const isPartner = roleRaw === 'PARTNER';
+    const isOfficer = roleRaw === 'MOBILITY_OFFICER';
 
-  private pushUnique(arr: string[], v: string){ v=v.trim(); if(!v) return arr; if(!arr.includes(v)) arr = [...arr, v]; return arr; }
-  addTopicTag(){ this.topicTags.set(this.pushUnique(this.topicTags(), this.topicDraft)); this.topicDraft=''; }
-  removeTopicTag(i: number){ const a=[...this.topicTags()]; a.splice(i,1); this.topicTags.set(a); }
+    if (!isPartner && !isOfficer) {
+      this.router.navigate(['/pages/notfound']);
+      return;
+    }
 
-  addRequiredDoc(){ this.requiredDocs.set(this.pushUnique(this.requiredDocs(), this.docDraft)); this.docDraft=''; }
-  removeRequiredDoc(i: number){ const a=[...this.requiredDocs()]; a.splice(i,1); this.requiredDocs.set(a); }
+    // Default behavior:
+    // - Officer: esprit = true (can change)
+    // - Partner: esprit = false (locked/hidden)
+    if (isOfficer) {
+      this.form.get('esprit')!.setValue(true);
+      this.form.get('esprit')!.enable({ emitEvent: false });
+    } else {
+      this.form.get('esprit')!.setValue(false);
+      this.form.get('esprit')!.disable({ emitEvent: false });
+    }
 
-  addFormField(){ this.formFields.set(this.pushUnique(this.formFields(), this.fieldDraft)); this.fieldDraft=''; }
-  removeFormField(i: number){ const a=[...this.formFields()]; a.splice(i,1); this.formFields.set(a); }
-  resetDefaults(){ this.formFields.set([...DEFAULT_FORM_FIELDS]); }
+    const ty = this.form.get('targetYear')?.value as TargetYear | null;
+    this.formFields.set(defaultFieldsFor(ty));
+  }
 
+  // chips helpers
+  private pushUnique(arr: string[], v: string){
+    v = v.trim();
+    if (!v) return arr;
+    if (!arr.includes(v)) arr = [...arr, v];
+    return arr;
+  }
+
+  addTopicTag(){
+    this.topicTags.set(this.pushUnique(this.topicTags(), this.topicDraft));
+    this.topicDraft='';
+  }
+  removeTopicTag(i: number){
+    const a=[...this.topicTags()];
+    a.splice(i,1);
+    this.topicTags.set(a);
+  }
+
+  addRequiredDoc(){
+    this.requiredDocs.set(this.pushUnique(this.requiredDocs(), this.docDraft));
+    this.docDraft='';
+  }
+  removeRequiredDoc(i: number){
+    const a=[...this.requiredDocs()];
+    a.splice(i,1);
+    this.requiredDocs.set(a);
+  }
+
+  addFormField(){
+    this.formFields.set(this.pushUnique(this.formFields(), this.fieldDraft));
+    this.fieldDraft='';
+  }
+  removeFormField(i: number){
+    const a=[...this.formFields()];
+    a.splice(i,1);
+    this.formFields.set(a);
+  }
+
+  resetDefaults(){
+    const ty = this.form.get('targetYear')?.value as TargetYear | null;
+    this.formFields.set(defaultFieldsFor(ty));
+  }
+
+  onTargetYearChange(){
+    const ty = this.form.get('targetYear')?.value as TargetYear | null;
+    this.formFields.set(defaultFieldsFor(ty));
+  }
+
+  // image helpers
   onPickImage(ev: Event) {
     const f = (ev.target as HTMLInputElement).files?.[0] || null;
     this.file.set(f);
-    if (f) { const reader = new FileReader(); reader.onload = () => this.preview.set(reader.result as string); reader.readAsDataURL(f); }
-    else { this.preview.set(null); }
+    if (f) {
+      const reader = new FileReader();
+      reader.onload = () => this.preview.set(reader.result as string);
+      reader.readAsDataURL(f);
+    } else {
+      this.preview.set(null);
+    }
   }
-  removeImage(){ this.file.set(null); this.preview.set(null); if (this.fileInput?.nativeElement) this.fileInput.nativeElement.value = ''; }
 
+  removeImage(){
+    this.file.set(null);
+    this.preview.set(null);
+    if (this.fileInput?.nativeElement) this.fileInput.nativeElement.value = '';
+  }
+
+  // save helpers
   private ymd(d: Date){
-    const y=d.getFullYear(), m=(d.getMonth()+1).toString().padStart(2,'0'), da=d.getDate().toString().padStart(2,'0');
+    const y  = d.getFullYear();
+    const m  = (d.getMonth()+1).toString().padStart(2,'0');
+    const da = d.getDate().toString().padStart(2,'0');
     return `${y}-${m}-${da}T00:00:00`;
   }
 
-  // return an OBJECT for jsonb, not a string
   private buildFormJson(fields: string[]): any | null {
     const clean = fields.map(s => s.trim()).filter(Boolean);
     return clean.length ? { fields: clean } : null;
   }
 
   onSave(){
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
     this.busy.set(true);
 
     const v = this.form.value as any;
 
-    // Build payload with correct names & types for backend
-    const payload: OfferCreatePayload & any = {
-      title: v.title,
-      description: v.description,
-      seats: Number(v.availableSlots),                   // <- matches entity
-      deadline: v.deadline ? this.ymd(v.deadline as Date) : null,
-      type: v.type!,                                           // 'EXCHANGE' | 'DOUBLE_DEGREE' | 'MASTERS'
-      targetYear: v.targetYear!,
-      topicTags: this.topicTags(),                             // <- array -> jsonb
-      requiredDocs: this.requiredDocs(),                       // <- array -> jsonb
-      formJson: this.buildFormJson(this.formFields()),         // <- object -> jsonb
+const payload: OfferCreatePayload & any = {
+  title: v.title,
+  description: v.description,
+  seats: Number(v.availableSlots),
+  deadline: v.deadline ? this.ymd(v.deadline as Date) : null,
+  type: v.type!,
+  targetYear: v.targetYear!,
 
-      // NEW snapshot fields
-      universityName: v.universityName,
-      countryCode: v.countryCode || null,
-      addressLine: v.addressLine || null,
-      contactEmail: v.contactEmail || null,
-      contactPhone: v.contactPhone || null,
-    };
+  topicTags: this.topicTags(),
+  requiredDocs: this.requiredDocs(),
+  formJson: this.buildFormJson(this.formFields()),
+
+  universityName: v.universityName,
+  countryCode: v.countryCode || null,
+  addressLine: v.addressLine || null,
+  contactEmail: v.contactEmail || null,
+  contactPhone: v.contactPhone || null,
+
+  esprit: this.form.get('esprit')!.value === true,  // <-- NEW
+};
 
     this.srv.createOffer(payload).subscribe({
       next: (created) => {
@@ -314,21 +563,39 @@ export class OfferCreatePageComponent implements OnInit {
         if (!img) {
           this.toast.add({severity:'success', summary:'Offer created'});
           this.busy.set(false);
-          this.router.navigate(['/offers/list', created.id]);
+                      this.router.navigate(['/pages/offer/list']);
+
           return;
         }
         this.srv.uploadOfferImage(created.id!, img).subscribe({
           next: () => {
             this.toast.add({severity:'success', summary:'Offer created with image'});
             this.busy.set(false);
-            this.router.navigate(['/offers/list', created.id]);
+                        this.router.navigate(['/pages/offer/list']);
+
           },
-          error: (err) => { this.busy.set(false); this.toast.add({severity:'warn', summary:'Offer ok (image failed)', detail: this.err(err)}); }
+          error: (err) => {
+            this.busy.set(false);
+            this.toast.add({
+              severity:'warn',
+              summary:'Offer ok (image failed)',
+              detail: this.err(err)
+            });
+          }
         });
       },
-      error: (err) => { this.busy.set(false); this.toast.add({severity:'error', summary:'Create failed', detail:this.err(err)}); }
+      error: (err) => {
+        this.busy.set(false);
+        this.toast.add({
+          severity:'error',
+          summary:'Create failed',
+          detail:this.err(err)
+        });
+      }
     });
   }
 
-  private err(e:any){ return e?.error?.message || e?.message || 'Unexpected error'; }
+  private err(e:any){
+    return e?.error?.message || e?.message || 'Unexpected error';
+  }
 }

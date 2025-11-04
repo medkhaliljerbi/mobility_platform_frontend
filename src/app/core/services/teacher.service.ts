@@ -3,12 +3,16 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
+// -------------------- TYPES USED BY PROFILE PAGE (unchanged) --------------------
+
 export type FieldType = 'IT' | 'TELECOM' | 'GC' | 'EM';
+
 export type OptionCodeType =
   | 'ERP_BI' | 'ARCTIC' | 'SAE' | 'SIM' | 'INFINI' | 'DS' | 'SE' | 'TWIN' | 'IA' | 'NIDS' | 'GAMIX' | 'DATA_IT' | 'SLEAM'
   | 'IOSYS' | 'DATA_TEL'
   | 'SO' | 'PC' | 'RN2E'
-  | 'MECATRONIQUE' | 'OGI';
+  | 'MECATRONIQUE' | 'OGI'
+  | null;
 
 export interface TeacherSelfView {
   // identity
@@ -39,16 +43,49 @@ export interface TeacherSelfUpdate {
   option?: OptionCodeType | null;       // for ChefOption
 }
 
+// -------------------- TYPES USED BY RECOMMENDATION FEATURE --------------------
+
+// This should match what backend returns for "eligible students"
+export interface RecommendableStudentView {
+  id: number;
+  fullName: string;
+  email: string;
+  studentIdentifier: string | null;
+  currentClass: string | null;
+  speciality: OptionCodeType | null; // speciality/option code from student
+}
+
+// body we POST to create recommendation
+export interface CreateRecommendationRequest {
+  offerId: number;
+  studentId: number;
+  message?: string;
+}
+
+// response from POST /api/recommendations
+export interface CreateRecommendationResponse {
+  recommendationId: number;
+  offerId: number;
+  studentId: number;
+  teacherId: number;
+  message: string;
+}
+
+// -------------------- SERVICE --------------------
+
 @Injectable({ providedIn: 'root' })
 export class TeacherService {
   private http = inject(HttpClient);
+
+  // base api: <env.apiBase>/api  (strip trailing slash from env.apiBase)
   private readonly base = environment.apiBase.replace(/\/+$/, '') + '/api';
 
-  private url(p: string) { return `${this.base}/${p.replace(/^\/+/, '')}`; }
+  private url(p: string) {
+    return `${this.base}/${p.replace(/^\/+/, '')}`;
+  }
 
-  private readonly profileUrl = this.url('/teacher/profile');
-  private readonly avatarUploadUrl = this.url('/teacher/profile/photo/upload');
-
+  // ⬇ KEEP YOUR ORIGINAL TOKEN STRATEGY so nothing else breaks
+  // we just reuse it for all calls (profile + recommendation)
   private authHeaders(): HttpHeaders {
     const token =
       localStorage.getItem('access_token') ||
@@ -56,9 +93,22 @@ export class TeacherService {
       localStorage.getItem('jwt') ||
       localStorage.getItem('token') ||
       '';
-    return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
+    return token
+      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
+      : new HttpHeaders();
   }
-  private opts() { return { withCredentials: true, headers: this.authHeaders() }; }
+
+  private opts() {
+    return {
+      withCredentials: true,
+      headers: this.authHeaders()
+    };
+  }
+
+  // ---------- PROFILE ENDPOINTS (unchanged, do not touch) ----------
+
+  private readonly profileUrl      = this.url('/teacher/profile');
+  private readonly avatarUploadUrl = this.url('/teacher/profile/photo/upload');
 
   getMe(): Observable<TeacherSelfView> {
     return this.http.get<TeacherSelfView>(this.profileUrl, this.opts());
@@ -76,5 +126,69 @@ export class TeacherService {
 
   deleteAvatar(): Observable<TeacherSelfView> {
     return this.updateMe({ photoObjectKey: null });
+  }
+
+  // ---------- RECOMMENDATION FEATURE (new) ----------
+
+  /**
+   * Get all eligible students for a given offer.
+   *
+   * EXPECTED backend mapping:
+   *   GET /api/recommendations/eligible/{offerId}
+   *
+   * If your backend is actually
+   *   GET /api/teacher/recommendation/eligible-students?offerId=...
+   * then swap the URL below back to that form.
+   */
+  getEligibleStudents(offerId: number): Observable<RecommendableStudentView[]> {
+    // version 1 (RESTful path style)
+    return this.http.get<RecommendableStudentView[]>(
+      this.url(`/recommendations/eligible/${offerId}`),
+      this.opts()
+    );
+
+    // If your controller is still old style:
+    // return this.http.get<RecommendableStudentView[]>(
+    //   this.url(`/teacher/recommendation/eligible-students?offerId=${offerId}`),
+    //   this.opts()
+    // );
+  }
+
+  /**
+   * Recommend a given student for an offer.
+   *
+   * EXPECTED backend mapping:
+   *   POST /api/recommendations
+   *   body: { offerId, studentId, message }
+   *
+   * If your backend is:
+   *   POST /api/teacher/recommendation/{offerId}
+   *   body: { studentId, message }
+   * then use the alternative block below.
+   */
+  recommendStudent(
+    offerId: number,
+    studentId: number,
+    message: string = ''
+  ): Observable<CreateRecommendationResponse> {
+    const body: CreateRecommendationRequest = {
+      offerId,
+      studentId,
+      message
+    };
+
+    // version 1 (POST /api/recommendations)
+    return this.http.post<CreateRecommendationResponse>(
+      this.url('/recommendations'),
+      body,
+      this.opts()
+    );
+
+    // Alternative for legacy mapping:
+    // return this.http.post<CreateRecommendationResponse>(
+    //   this.url(`/teacher/recommendation/${offerId}`),
+    //   { studentId, message },
+    //   this.opts()
+    // );
   }
 }

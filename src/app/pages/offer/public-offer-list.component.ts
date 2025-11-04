@@ -1,14 +1,29 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { DataViewModule } from 'primeng/dataview';
 import { ButtonModule } from 'primeng/button';
-import { OfferService, OfferView } from '@/core/services/offer.service';
-import { AuthService } from '@/core/services/auth.service'; // <-- ADD THIS
+import {
+  OfferService,
+  OfferView,
+  RecommendationItem
+} from '@/core/services/offer.service';
+import { AuthService } from '@/core/services/auth.service';
+
 type OfferStatus = 'OPEN' | 'CLOSED';
+type Role =
+  | 'STUDENT'
+  | 'ENTRANT'
+  | 'TEACHER'
+  | 'CHEF'
+  | 'MOBILITY_AGENT'
+  | 'ADMIN'
+  | 'UNKNOWN';
+
+type HydratedRecommendation = OfferView & RecommendationItem;
 
 @Component({
-  selector: 'app-offer-list',
+  selector: 'app-public-offer-list',
   standalone: true,
   imports: [CommonModule, DataViewModule, ButtonModule],
   styles: [`
@@ -22,6 +37,29 @@ type OfferStatus = 'OPEN' | 'CLOSED';
       background:var(--surface-0);
     }
     .item + .item{ border-top:1px solid var(--surface-300, #e5e7eb); }
+
+    .top-matches{
+      padding:1rem;
+      margin-bottom:1.5rem;
+    }
+
+    .top-title{
+      font-weight:700;
+      margin-bottom:.75rem;
+      font-size:1rem;
+    }
+
+    .top-item{
+      padding:1rem;
+      display:flex;
+      flex-direction:column;
+      gap:1rem;
+    }
+    .top-item + .top-item{
+      border-top:1px solid var(--surface-300, #d1d5db);
+      margin-top:1rem;
+      padding-top:1rem;
+    }
 
     .line{ display:flex; gap:1rem; align-items:flex-start; }
 
@@ -38,9 +76,11 @@ type OfferStatus = 'OPEN' | 'CLOSED';
     .title{ font-weight:700; font-size:1.125rem; letter-spacing:.2px; }
     .desc{ color:var(--text-color-secondary); line-height:1.35; }
 
-    .meta-chips{ display:flex; gap:1rem; flex-wrap:wrap; margin-top:.25rem; }
-    .chip{ color:var(--text-color-secondary); }
-    .chip strong{ color:var(--text-color); }
+    .scores { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; font-size:.875rem; }
+    .score-pill{
+      font-size:.8rem; padding:.2rem .5rem; border-radius:9999px;
+      background:var(--surface-200); color:var(--text-color);
+    }
 
     .right{
       margin-left:auto; align-self:flex-start;
@@ -50,6 +90,10 @@ type OfferStatus = 'OPEN' | 'CLOSED';
     .dot{ width:12px; height:12px; border-radius:50%; }
     .dot.open{ background:#22c55e; }
     .dot.closed{ background:#ef4444; }
+
+    .meta-chips{ display:flex; gap:1rem; flex-wrap:wrap; margin-top:.25rem; }
+    .chip{ color:var(--text-color-secondary); font-size:.9rem; }
+    .chip strong{ color:var(--text-color); }
 
     .bottom{ display:flex; justify-content:flex-end; margin-top:.25rem; }
     .chev{ border:none; background:transparent; cursor:pointer; border-radius:.5rem; padding:.35rem; }
@@ -82,32 +126,60 @@ type OfferStatus = 'OPEN' | 'CLOSED';
       position:relative;
     }
 
-    .confirm-pop{
-      position:absolute;
-      right:0;
-      bottom:2.75rem;
-      width:260px;
-      background:var(--surface-0);
-      border:1px solid var(--surface-300, #e5e7eb);
-      box-shadow:0 6px 18px rgba(0,0,0,.08);
-      border-radius:.5rem;
-      padding:.75rem;
-      z-index:10;
-    }
-    .confirm-title{ font-weight:600; margin-bottom:.35rem; }
-    .confirm-actions{ display:flex; gap:.5rem; justify-content:flex-end; margin-top:.5rem; }
-    @media (max-width:640px){
-      .line{ flex-direction:column; }
-      .right{ align-self:flex-end; }
-      .thumb{ width:100%; min-width:0; aspect-ratio:16/9; }
-      .confirm-pop{ bottom:3.25rem; right:.25rem; }
+    .section-line{
+      border:0;
+      border-top:3px solid var(--surface-400, #6b7280);
+      margin:1rem 0 1.5rem 0;
     }
   `],
   template: `
   <div class="card list-card">
-    <div class="text-3xl font-bold mb-4">Offers List</div>
+    <div class="text-3xl font-bold mb-4">Offers</div>
 
-    <p-dataview [value]="offers" layout="list">
+    <!-- TOP 3 MATCHES (only for non-Entrant students) -->
+    <div class="top-matches" *ngIf="isScoreEnabled && topMatches.length > 0">
+      <div class="top-title">Top matches for you</div>
+
+      <div class="row">
+        <div class="top-item" *ngFor="let o of topMatches; trackBy: trackById">
+          <div class="line">
+            <div class="thumb">
+              <img [src]="o.imageUrl || placeholder" [alt]="o.title" (error)="onImgError($event)" />
+            </div>
+
+            <div class="meta">
+              <div class="title">{{ o.title }}</div>
+              <div class="desc">{{ o.description }}</div>
+
+              <div class="scores">
+                <span>Match: {{ (o.recoScore ?? 0) | number:'1.0-2' }}</span>
+                <span>Certificates: {{ (o.certScore ?? 0) | number:'1.0-2' }}</span>
+                <span>Grades: {{ (o.gradeScore ?? 0) | number:'1.0-2' }}</span>
+              </div>
+            </div>
+
+            <div class="right">
+              <span class="dot" [ngClass]="{ open: isActive(o), closed: !isActive(o) }"></span>
+            </div>
+          </div>
+
+          <div class="panel-actions">
+            <p-button
+              *ngIf="canApply(o)"
+              label="Apply"
+              icon="pi pi-send"
+              (onClick)="apply(o)">
+            </p-button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-line" *ngIf="isScoreEnabled && topMatches.length > 0" />
+    <div class="top-title">All Offers</div>
+
+    <!-- FULL LIST -->
+    <p-dataview [value]="filteredOffers" layout="list">
       <ng-template let-items #list>
         <div class="row">
           <div class="item" *ngFor="let o of items; trackBy: trackById">
@@ -119,12 +191,10 @@ type OfferStatus = 'OPEN' | 'CLOSED';
               <div class="meta">
                 <div class="title">{{ o.title }}</div>
                 <div class="desc">{{ o.description }}</div>
-<div class="Target year">{{ o.targetYear }} Year students</div>
+                <div class="Target year">{{ o.targetYear }} Year students</div>
                 <div class="meta-chips">
                   <span class="chip">Seats: <strong>{{ seatsOf(o) ?? '—' }}</strong></span>
                   <span class="chip">Deadline: <strong>{{ dateOnly(o.deadline) }}</strong></span>
-
-                  <!-- NEW: show snapshot fields when present -->
                   <span class="chip" *ngIf="o.universityName">University: <strong>{{ o.universityName }}</strong></span>
                   <span class="chip" *ngIf="o.countryCode">Country: <strong>{{ o.countryCode }}</strong></span>
                 </div>
@@ -143,13 +213,6 @@ type OfferStatus = 'OPEN' | 'CLOSED';
 
             <div class="exp" [class.show]="o['expanded']">
               <div class="exp-inner">
-                <div class="block" *ngIf="(o.formJson?.fields?.length || 0) > 0">
-                  <div class="block-title">Required Information</div>
-                  <div class="chips">
-                    <span class="chip-pill" *ngFor="let f of (o.formJson?.fields || []); trackBy: trackByIndex">{{ f }}</span>
-                  </div>
-                </div>
-
                 <div class="block" *ngIf="(o.topicTags?.length || 0) > 0">
                   <div class="block-title">Topic Tags</div>
                   <div class="chips">
@@ -164,7 +227,6 @@ type OfferStatus = 'OPEN' | 'CLOSED';
                   </div>
                 </div>
 
-                <!-- NEW: University & Contact snapshot details -->
                 <div class="block" *ngIf="o.universityName || o.addressLine || o.contactEmail || o.contactPhone">
                   <div class="block-title">University & Contact</div>
                   <div class="chips">
@@ -176,22 +238,24 @@ type OfferStatus = 'OPEN' | 'CLOSED';
                   </div>
                 </div>
 
-                <!-- Bottom-right buttons -->
                 <div class="panel-actions">
-                  <div class="confirm-pop" *ngIf="o['_askDelete']">
-                    <div class="confirm-title">Delete offer?</div>
-                    <div class="text-color-secondary text-sm">{{ o.title }}</div>
-                    <div class="confirm-actions">
-                      <p-button label="Cancel" (onClick)="cancelAsk(o)" [text]="true"></p-button>
-                      <p-button label="Delete" icon="pi pi-trash" severity="danger" (onClick)="confirmDelete(o)"></p-button>
-                    </div>
-                  </div>
+                  <p-button
+                    *ngIf="canApply(o)"
+                    label="Apply"
+                    icon="pi pi-send"
+                    (onClick)="apply(o)">
+                  </p-button>
 
-                  <p-button label="Update" icon="pi pi-pencil" (onClick)="updateItem(o)"></p-button>
-                  <p-button label="Delete" icon="pi pi-trash" severity="danger" (onClick)="askDelete(o)"></p-button>
+                  <p-button
+                    *ngIf="canRecommend()"
+                    label="Recommend"
+                    icon="pi pi-lightbulb"
+                    (onClick)="recommend(o)">
+                  </p-button>
                 </div>
               </div>
             </div>
+
           </div>
         </div>
       </ng-template>
@@ -199,24 +263,70 @@ type OfferStatus = 'OPEN' | 'CLOSED';
   </div>
   `
 })
-export class OfferListComponent implements OnInit {
+export class PublicOfferListComponent implements OnInit {
   offers: OfferView[] = [];
-    private auth  = inject(AuthService);
+  filteredOffers: OfferView[] = [];   // <-- filtered list for the view
+  topMatches: HydratedRecommendation[] = [];
   placeholder = 'https://via.placeholder.com/800x450?text=Offer+Image';
 
-  constructor(private offerService: OfferService, private router: Router) {}
+  role: Role = 'UNKNOWN';
+  isStudent = false;
+  isEntrant = false;
+  isScoreEnabled = false; // non-entrant students only
+
+  constructor(
+    private offerService: OfferService,
+    private auth: AuthService,
+    private router: Router
+  ) {}
 
   ngOnInit(): void {
-    this.offerService.getAllOffers().subscribe({
-      next: (rows) => this.offers = rows ?? [],
-      error: (e) => { console.error('Failed to load offers', e); this.offers = []; }
-    });
-   const roleRaw = (this.auth.currentRole() || '').toUpperCase();
-    const allowed = roleRaw === 'PARTNER' || roleRaw === 'MOBILITY_OFFICER';
-    if (!allowed) {
-      // bounce them if they are not allowed to create offers
-      this.router.navigate(['/pages/notfound']);
+    const roleRaw = (this.auth.currentRole() || 'UNKNOWN').toUpperCase();
+    this.role = (['STUDENT','ENTRANT','TEACHER','CHEF','MOBILITY_AGENT','ADMIN'].includes(roleRaw)
+      ? (roleRaw as Role)
+      : 'UNKNOWN');
+
+    this.isStudent = this.role === 'STUDENT';
+    this.isEntrant = this.role === 'ENTRANT';
+    this.isScoreEnabled = this.isStudent && !this.isEntrant;
+
+    if (this.role === 'MOBILITY_AGENT') {
+      this.router.navigate(['/pages/offer/list']);
       return;
+    }
+
+    this.offerService.getAllOffers().subscribe({
+      next: (rows) => {
+        this.offers = rows ?? [];
+        this.applyEspritFilter();        // <-- apply after load
+      },
+      error: (e) => {
+        console.error('Failed to load offers', e);
+        this.offers = [];
+        this.filteredOffers = [];
+      }
+    });
+
+    // also apply early in case role gate matters before load completes
+    this.applyEspritFilter();
+
+    if (this.isScoreEnabled) {
+      this.offerService.getOffersRankedByMyScore(20).subscribe({
+        next: (rows) => this.topMatches = (rows ?? []).slice(0, 3),
+        error: (e) => { console.warn('My-score unavailable', e); this.topMatches = []; }
+      });
+    }
+  }
+
+  // ---- esprit filter ----
+  private applyEspritFilter() {
+    // esprit flag may be boolean or undefined, so compare strictly for entrant case
+    if (this.isEntrant) {
+      this.filteredOffers = (this.offers ?? []).filter(o => (o as any).esprit === true);
+    } else if (this.isStudent) {
+      this.filteredOffers = (this.offers ?? []).filter(o => (o as any).esprit !== true);
+    } else {
+      this.filteredOffers = this.offers ?? [];
     }
   }
 
@@ -239,17 +349,30 @@ export class OfferListComponent implements OnInit {
     return `${y}-${m}-${da}`;
   }
 
-  /** green if status OPEN and deadline not passed; red otherwise */
   isActive(o: OfferView): boolean {
     const status: OfferStatus = (o as any).status;
     const open = status === 'OPEN';
+
     const s = o.deadline;
     if (!s) return false;
+
     const d = new Date(s);
     if (isNaN(d.getTime())) return open;
-    const norm = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
-    const due = norm(d) < norm(new Date());
-    return open && !due;
+
+    const norm = (x: Date) =>
+      new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const expired = norm(d) < norm(new Date());
+
+    return open && !expired;
+  }
+
+  canApply(o: OfferView): boolean {
+    const allowedRole = this.isStudent || this.isEntrant;
+    return allowedRole && this.isActive(o);
+  }
+
+  canRecommend(): boolean {
+    return this.role === 'TEACHER' || this.role === 'CHEF';
   }
 
   onImgError(ev: Event){
@@ -265,27 +388,13 @@ export class OfferListComponent implements OnInit {
   trackById = (_: number, o: OfferView) => o.id;
   trackByIndex = (i: number) => i;
 
-  updateItem(o: OfferView){
-    this.router.navigate(['/pages/offer/update', o.id]);
+  apply(o: OfferView){
+    if (!this.canApply(o)) return;
+    this.router.navigate(['/pages/student/apply', o.id]);
   }
 
-  askDelete(o: OfferView){
-    (o as any)['_askDelete'] = true;
-  }
-
-  cancelAsk(o: OfferView){
-    (o as any)['_askDelete'] = false;
-  }
-
-  confirmDelete(o: OfferView){
-    this.offerService.deleteOffer(o.id).subscribe({
-      next: () => {
-        this.offers = this.offers.filter(x => x.id !== o.id);
-      },
-      error: (e) => {
-        console.error('Failed to delete', e);
-        (o as any)['_askDelete'] = false;
-      }
-    });
+  recommend(o: OfferView){
+    if (!this.canRecommend()) return;
+    this.router.navigate(['/pages/teacher/recommend', o.id]);
   }
 }

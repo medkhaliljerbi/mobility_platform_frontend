@@ -13,7 +13,7 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { SelectModule } from 'primeng/select';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
-
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { OfferService, OfferCreatePayload, OfferType, TargetYear, OfferView } from '@/core/services/offer.service';
 
 const OFFER_TYPE_OPTS = [
@@ -33,7 +33,7 @@ const TARGET_YEAR_OPTS = [
   imports: [
     CommonModule, ReactiveFormsModule, FormsModule, HttpClientModule,
     FluidModule, CardModule, ButtonModule, InputTextModule,
-    InputNumberModule, DatePickerModule, SelectModule, ToastModule
+    InputNumberModule, DatePickerModule, SelectModule, ToastModule,ToggleSwitchModule
   ],
   providers: [MessageService],
   styles: [`
@@ -112,13 +112,17 @@ const TARGET_YEAR_OPTS = [
                   {{t}} <button type="button" (click)="removeTopicTag(i)" title="remove"><i class="pi pi-times"></i></button>
                 </span>
               </div>
+
               <div class="chip-input">
                 <input pInputText [(ngModel)]="topicDraft" [ngModelOptions]="{standalone:true}" (keyup.enter)="addTopicTag()" placeholder="type tag then Enter"/>
                 <button pButton type="button" icon="pi pi-plus" class="p-button-sm" (click)="addTopicTag()"></button>
               </div>
             </div>
           </div>
-
+              <div class="field" *ngIf="true">
+  <span class="label">Esprit Program</span>
+<p-toggleswitch formControlName="esprit"></p-toggleswitch>
+</div>
           <div class="field">
             <span class="label">Required Documents</span>
             <div class="chips">
@@ -236,6 +240,8 @@ export class OfferUpdatePageComponent implements OnInit {
     addressLine:    [''],
     contactEmail:   ['', Validators.email],
     contactPhone:   [''],
+
+    esprit:         [false],
   });
 
   ngOnInit(): void {
@@ -321,6 +327,7 @@ export class OfferUpdatePageComponent implements OnInit {
       addressLine: v.addressLine || null,
       contactEmail: v.contactEmail || null,
       contactPhone: v.contactPhone || null,
+       esprit: this.form.get('esprit')!.value === true,
     };
 
     this.srv.updateOffer(this.id, patch).subscribe({

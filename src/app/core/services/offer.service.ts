@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, catchError, forkJoin, map,of,switchMap } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
 export type OfferType   = 'EXCHANGE' | 'DOUBLE_DEGREE' | 'MASTERS';
@@ -15,8 +15,8 @@ export interface OfferView {
   deadline: string | null;       // ISO
   type: OfferType;
   targetYear: TargetYear;
-
-  // NEW: snapshot fields on the Offer entity
+esprit: boolean;
+  // snapshot fields on the Offer entity
   universityName: string;
   countryCode?: string | null;
   addressLine?: string | null;
@@ -39,8 +39,8 @@ export interface OfferCreatePayload {
   deadline: string | null;
   type: OfferType;
   targetYear: TargetYear;
-
-  // NEW: snapshot fields in payload
+  esprit?: boolean;
+  // snapshot fields in payload
   universityName: string;
   countryCode?: string | null;
   addressLine?: string | null;
@@ -50,6 +50,47 @@ export interface OfferCreatePayload {
   topicTags?: string[] | null;
   requiredDocs?: string[] | null;
   formJson?: string | { fields: string[] } | null; // jsonb
+}
+
+/* ------------ NEW: scoring/recommendation DTOs (mirror backend) ------------ */
+export interface CertContrib {
+  certificateId?: number | null;
+  certificateName?: string | null;
+  sSem: number;     // semantic
+  sKw: number;      // keyword
+  sTopic: number;   // topic-tag
+  levelWeight: number;
+  sMatch: number;   // combined
+}
+
+export interface RecommendationItem {
+  offerId: number;
+  title: string;
+  certScore: number;
+  gradeScore: number;
+  recoScore: number;
+  explain?: { certContribs?: CertContrib[] };
+}
+
+export interface MyScore {
+  offerId: number;
+  title: string;
+  gradeScore: number;
+  certScore: number;
+  finalScore: number;
+  explain?: { certContribs?: CertContrib[] };
+}
+
+/* ------------ NEW: application DTOs ------------ */
+export interface MyApplicationView {
+  id: number;
+  offerId: number;
+  status: string;          // "SUBMITTED", etc.
+  createdAt?: string;
+  gradeScore?: number;
+  certScore?: number;
+  finalScore?: number;
+  answersJson?: Record<string, any>;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -69,7 +110,7 @@ export class OfferService {
   }
   private opts() { return { withCredentials: true, headers: this.authHeaders() }; }
 
-  /* --------- CRUD + image --------- */
+  /* ----------------------------- CRUD + image ------------------------------ */
 
   createOffer(payload: OfferCreatePayload): Observable<OfferView> {
     const body: any = { ...payload };
@@ -111,4 +152,92 @@ export class OfferService {
 
   openOffer(id: number){  return this.http.put<OfferView>(this.url(`/offers/${id}/open`),  {}, this.opts()); }
   closeOffer(id: number){ return this.http.put<OfferView>(this.url(`/offers/${id}/close`), {}, this.opts()); }
+
+  /* ----------------- student recommendations & scoring ----------------- */
+
+  /** GET /api/offers/recommendations?limit=N */
+  getRecommendations(limit = 20): Observable<RecommendationItem[]> {
+    return this.http.get<RecommendationItem[]>(
+      this.url(`/offers/recommendations?limit=${limit}`),
+      this.opts()
+    );
+  }
+
+  /** GET /api/offers/{offerId}/my-score */
+  getMyScore(offerId: number): Observable<MyScore> {
+    return this.http.get<MyScore>(this.url(`/offers/${offerId}/my-score`), this.opts());
+  }
+
+  /**
+   * Fetch recommendations and hydrate each item with full OfferView (for image, tags…).
+   * Returns an array sorted by recoScore desc.
+   */
+  getRecommendedOffersHydrated(limit = 20): Observable<(OfferView & RecommendationItem)[]> {
+    return forkJoin({
+      offers: this.getAllOffers(),
+      recs:   this.getRecommendations(limit)
+    }).pipe(
+      map(({ offers, recs }) => {
+        const byId = new Map<number, OfferView>(offers.map(o => [o.id, o]));
+        return recs
+          .map(r => {
+            const full = byId.get(r.offerId);
+            if (!full) return null; // drop if no full offer data
+            return { ...full, ...r } as (OfferView & RecommendationItem);
+          })
+          .filter((x): x is OfferView & RecommendationItem => x !== null)
+          .sort((a, b) => (b.recoScore ?? 0) - (a.recoScore ?? 0));
+      })
+    );
+  }
+
+  /* ------------------------- applications (Module 1) ------------------------- */
+
+// check if I already applied to this offer
+getMyApplicationForOffer(offerId: number) {
+  return this.http.get<any>(
+    this.url(`/applications/${offerId}/me`),
+    this.opts()
+  );
+}
+
+// submit first-stage application
+submitApplication(offerId: number, answers: Record<string,string>) {
+  return this.http.post<any>(
+    this.url(`/applications/${offerId}`),
+    { answers }, // matches backend controller body { "answers": {...} }
+    this.opts()
+  );
+}
+
+getOffersRankedByMyScore(limit = 20): Observable<(OfferView & RecommendationItem)[]> {
+  return this.getAllOffers().pipe(
+    switchMap((offers) => {
+      if (!offers || offers.length === 0) return of([]);
+
+      const calls = offers.map((o) =>
+        this.getMyScore(o.id).pipe(
+          map((ms) => ({
+            ...o,
+            // map my-score fields into the RecommendationItem shape
+            certScore: ms.certScore,
+            gradeScore: ms.gradeScore,
+            recoScore: ms.finalScore,   // <-- reuse existing UI field
+          }) as OfferView & RecommendationItem),
+          // if a single my-score fails, just drop that item
+          catchError(() => of(null))
+        )
+      );
+
+      return forkJoin(calls).pipe(
+        map(items =>
+          (items.filter(Boolean) as (OfferView & RecommendationItem)[])
+            .sort((a,b) => (b.recoScore ?? 0) - (a.recoScore ?? 0))
+            .slice(0, limit)
+        )
+      );
+    })
+  );
+}
+
 }
