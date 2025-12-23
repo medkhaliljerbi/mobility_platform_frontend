@@ -14,6 +14,9 @@ import { InputTextModule } from 'primeng/inputtext';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 
+import { forkJoin, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
+
 type OfferStatus = 'OPEN' | 'CLOSED';
 
 @Component({
@@ -77,6 +80,50 @@ type OfferStatus = 'OPEN' | 'CLOSED';
 
     :host ::ng-deep .p-card .p-card-body { padding:1rem 1.25rem; }
     :host ::ng-deep .p-card .p-card-title { font-size:1.25rem; }
+
+    /* Offer header block (image + info) */
+    .offer-header {
+      display:flex;
+      flex-direction:row;
+      gap:1rem;
+      margin-bottom:1rem;
+      margin-top:.5rem;
+    }
+    .offer-header-img {
+      width:180px;
+      min-width:180px;
+      height:110px;
+      border-radius:.5rem;
+      overflow:hidden;
+      background:var(--surface-100);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:.8rem;
+      color:var(--text-color-secondary);
+    }
+    .offer-header-img img{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .offer-header-meta{
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      gap:.35rem;
+    }
+    .offer-tag-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:.4rem;
+      font-size:.8rem;
+    }
+    .offer-desc{
+      font-size:.9rem;
+      color:var(--text-color-secondary);
+    }
   `],
   template: `
 <p-fluid>
@@ -95,69 +142,123 @@ type OfferStatus = 'OPEN' | 'CLOSED';
               </div>
 
               <div class="meta-line">
+                <!-- OFFER STATUS (same logic, just display pill) -->
                 <span class="status-pill"
                       [ngStyle]="{background: offerActive() ? '#dcfce7' : '#fee2e2', color: offerActive() ? '#166534' : '#991b1b'}">
                   {{ offerActive() ? 'Open' : 'Closed' }}
                 </span>
 
+                <!-- APPLICATION STATUS: now dynamic from backend -->
                 <ng-container *ngIf="alreadyApplied()">
-                  <span class="status-pill">Submitted</span>
-                  <span class="status-pill">Score: {{ finalScore() | number:'1.0-2' }}</span>
+                  <span class="status-pill">
+                    {{ appStatus() }}
+                  </span>
+
+                  <span class="status-pill" *ngIf="finalScore() !== 0">
+                    Score: {{ finalScore() | number:'1.0-2' }}
+                  </span>
                 </ng-container>
               </div>
             </div>
           </div>
         </ng-template>
 
-        <!-- IF ALREADY APPLIED -->
-        <div *ngIf="alreadyApplied(); else newAppForm" class="group">
-          <div class="field">
-            <div class="label">Your final score snapshot</div>
-            <div class="p-inputtext p-component ctrl" style="background:var(--surface-100);border:1px solid var(--surface-300);cursor:not-allowed;">
-              {{ finalScore() | number:'1.0-3' }}
+        <!-- Show loading skeleton until both offer + me are ready -->
+        <ng-container *ngIf="ready(); else loading">
+
+          <!-- ===== Offer header block (image + tags) ===== -->
+          <div class="offer-header" *ngIf="offer() as o">
+            <div class="offer-header-img">
+              <img *ngIf="o.imageUrl"
+                   [src]="o.imageUrl"
+                   (error)="onOfferImgError($event)"
+                   alt="offer image" />
+              <span *ngIf="!o.imageUrl">No image</span>
+            </div>
+
+            <div class="offer-header-meta">
+              <div class="offer-desc">
+                {{ o.description }}
+              </div>
+
+              <div class="offer-tag-row">
+                <span class="status-pill">
+                  {{ o.type }}
+                </span>
+                <span class="status-pill">
+                  {{ o.status }}
+                </span>
+              </div>
+
+              <div class="meta-line" *ngIf="o.topicTags?.length">
+                Topics:
+                {{ (o.topicTags || []).join(', ') }}
+              </div>
+
+              <div class="meta-line" *ngIf="o.requiredDocs?.length">
+                Required docs:
+                {{ (o.requiredDocs || []).join(', ') }}
+              </div>
             </div>
           </div>
 
-          <div class="footer-actions">
-            <button pButton
-                    label="Back to offers"
-                    icon="pi pi-arrow-left"
-                    class="p-button-secondary"
-                    (click)="backToOffers()"></button>
-          </div>
-        </div>
-
-        <!-- IF NOT APPLIED YET -->
-        <ng-template #newAppForm>
-          <form [formGroup]="form" class="group">
-            <!-- Render inputs in the SAME order as offer.formJson.fields -->
-            <div class="field" *ngFor="let q of questionList(); trackBy: trackByIndex">
-              <div class="label">{{ q }}</div>
-              <input
-                pInputText
-                class="ctrl"
-                [readonly]="!offerActive()"
-                [formControlName]="ctrlName(q)"
-              />
+          <!-- IF ALREADY APPLIED -->
+          <div *ngIf="alreadyApplied(); else newAppForm" class="group">
+            <div class="field">
+              <div class="label">Your final score snapshot</div>
+              <div class="p-inputtext p-component ctrl"
+                   style="background:var(--surface-100);border:1px solid var(--surface-300);cursor:not-allowed;">
+                {{ finalScore() | number:'1.0-3' }}
+              </div>
             </div>
 
             <div class="footer-actions">
               <button pButton
-                      type="button"
-                      label="Cancel"
-                      icon="pi pi-times"
+                      label="Back to offers"
+                      icon="pi pi-arrow-left"
                       class="p-button-secondary"
                       (click)="backToOffers()"></button>
-
-              <button pButton
-                      type="button"
-                      label="Submit application"
-                      icon="pi pi-check"
-                      class="p-button-success"
-                      [disabled]="busy() || form.invalid || !offerActive()"
-                      (click)="onSubmit()"></button>
             </div>
-          </form>
+          </div>
+
+          <!-- IF NOT APPLIED YET -->
+          <ng-template #newAppForm>
+            <form [formGroup]="form" class="group">
+              <!-- Render inputs in the SAME order as offer.formJson.fields -->
+              <div class="field" *ngFor="let q of questionList(); trackBy: trackByIndex">
+                <div class="label">{{ q }}</div>
+                <input
+                  pInputText
+                  class="ctrl"
+                  [readonly]="!offerActive()"
+                  [formControlName]="ctrlName(q)"
+                />
+              </div>
+
+              <div class="footer-actions">
+                <button pButton
+                        type="button"
+                        label="Cancel"
+                        icon="pi pi-times"
+                        class="p-button-secondary"
+                        (click)="backToOffers()"></button>
+
+                <button pButton
+                        type="button"
+                        label="Submit application"
+                        icon="pi pi-check"
+                        class="p-button-success"
+                        [disabled]="busy() || form.invalid || !offerActive()"
+                        (click)="onSubmit()"></button>
+              </div>
+            </form>
+          </ng-template>
+        </ng-container>
+
+        <ng-template #loading>
+          <div class="group">
+            <div class="label">Loading application…</div>
+          </div>
         </ng-template>
 
       </p-card>
@@ -201,95 +302,86 @@ export class ApplyPageComponent implements OnInit {
     return open && deadlineDay.getTime() >= today.getTime();
   });
 
+  // do not render form until offer + me are loaded
+  ready = computed(() => !!this.offer() && !!this.me());
+
   ngOnInit(): void {
     const offerId = Number(this.route.snapshot.paramMap.get('offerId'));
 
-    // step 1: load offer
-    this.offers.getOffer(offerId).subscribe({
-      next: (o) => {
-        this.offer.set(o || null);
-        this.tryBuildAndPrefill(); // but we also need student data
-      },
-      error: (e) => { console.error('failed to load offer', e); this.offer.set(null); }
-    });
+    this.busy.set(true);
 
-    // step 2: load student
-    this.student.getMe().subscribe({
-      next: (info) => {
-        this.me.set(info || null);
-        this.tryBuildAndPrefill(); // once we have both we can prefill
-      },
-      error: (e) => { console.warn('getMe failed', e); this.me.set(null); }
-    });
+    forkJoin({
+      offer: this.offers.getOffer(offerId),
+      me:    this.student.getMe(),
+      app:   this.offers.getMyApplicationForOffer(offerId).pipe(
+               map(info => (info && info.status && info.status !== 'NONE') ? info : null),
+               catchError(() => of(null))
+             )
+    }).subscribe({
+      next: ({ offer, me, app }) => {
+        this.offer.set(offer ?? null);
+        this.me.set(me ?? null);
+        this.myApp.set(app);
 
-    // step 3: load my app status
-    this.offers.getMyApplicationForOffer(offerId).subscribe({
-      next: (info) => {
-        if (info && info.status && info.status !== 'NONE') {
-          this.myApp.set(info);
-        } else {
-          this.myApp.set(null);
-        }
+        // Build form from the offer schema and then prefill from student
+        this.buildFormOnce();
+        this.prefillAll();
+
+        this.busy.set(false);
       },
-      error: (e) => { console.warn('getMyApplicationForOffer failed', e); this.myApp.set(null); }
+      error: (e) => {
+        console.error('init failed', e);
+        this.offer.set(null);
+        this.me.set(null);
+        this.myApp.set(null);
+        this.busy.set(false);
+      }
     });
   }
 
-  /**
-   * Build form controls (from offer.formJson.fields)
-   * then patch values from student profile into the matching fields.
-   * We call this after we (might) have offer + me.
-   */
-  private tryBuildAndPrefill() {
-    const o = this.offer();
-    const s = this.me();
-    if (!o || !s) return; // wait until both are loaded in this run
-
-    const fields = this.questionList(); // ordered list of string labels from offer
+  /** Build controls in the SAME order as offer.formJson.fields */
+  private buildFormOnce() {
+    const fields = this.questionList();
     const group: Record<string, any> = {};
-
     for (const q of fields) {
-      const isMiddleName =
-        q.trim().toLowerCase() === 'middle name';
-      group[this.ctrlName(q)] = [
-        '',                                // initial value (we'll patch after)
-        isMiddleName ? [] : [Validators.required]
-      ];
+      const isMiddleName = q.trim().toLowerCase() === 'middle name';
+      group[this.ctrlName(q)] = ['', isMiddleName ? [] : [Validators.required]];
     }
-
     this.form = this.fb.group(group);
+  }
 
-    // now prefill each known field with backend data
-    this.prefillIfPresent('Esprit ID',               s.studentIdentifier);
-    this.prefillIfPresent('First Name',              s.firstName);
+  /** Patch student data into matching fields after both offer + me are ready */
+  private prefillAll() {
+    const s = this.me();
+    if (!s) return;
+
+    this.prefillIfPresent('Esprit ID',               (s as any).studentIdentifier);
+    this.prefillIfPresent('First Name',              (s as any).firstName);
     this.prefillIfPresent('Middle Name',             (s as any).middleName || '');
-    this.prefillIfPresent('Last Name',               s.lastName);
-    this.prefillIfPresent('Email',                   s.email);
-    this.prefillIfPresent('Email (esprit.tn)',       s.email);
+    this.prefillIfPresent('Last Name',               (s as any).lastName);
+    this.prefillIfPresent('Email',                   (s as any).email);
+    this.prefillIfPresent('Email (esprit.tn)',       (s as any).email);
     this.prefillIfPresent('Email (personal)',        (s as any).emailPersonnel || (s as any).emailPersonel || '');
-    this.prefillIfPresent('Phone Number',            (s as any).personnelPhoneNumber || (s as any).Personnel_PhoneNumber || '');
+    this.prefillIfPresent('Phone Number',            (s as any).personnelPhoneNumber || '');  // ✅ FIXED HERE
     this.prefillIfPresent('Civility',                (s as any).maritalStatus || '');
 
-    // Program/Class stuff (depends on how you named it in formJson)
-    const programStr = this.formatProgram(s);
+    const programStr = this.formatProgram(s as any);
     this.prefillIfPresent('Program / Class',         programStr);
     this.prefillIfPresent('Program',                 programStr);
-    this.prefillIfPresent('Class',                   s.currentClass || programStr);
+    this.prefillIfPresent('Class',                   (s as any).currentClass || programStr);
 
-    // Grades snapshot can appear as a combined field OR per-year lines
-    const gradesSnapshot = this.formatGrades(s);
+    const gradesSnapshot = this.formatGrades(s as any);
     this.prefillIfPresent('Grades snapshot', gradesSnapshot);
 
-    // Also patch per-year grade fields individually if they exist:
-    if (s.firstYearGrade  != null)
-      this.prefillIfPresent('Grade – 1st Year (main session)', String(s.firstYearGrade));
-    if (s.secondYearGrade != null)
-      this.prefillIfPresent('Grade – 2nd Year (main session)', String(s.secondYearGrade));
-    if (s.thirdYearGrade  != null)
-      this.prefillIfPresent('Grade – 3rd Year (main session)', String(s.thirdYearGrade));
-    if (s.fourthYearGrade != null)
-      this.prefillIfPresent('Grade – 4th Year (main session)', String(s.fourthYearGrade));
-    if ((s as any).fifthYearGrade != null)
+    if ((s as any).firstYearGrade  != null)
+      this.prefillIfPresent('Grade – 1st Year (main session)', String((s as any).firstYearGrade));
+    if ((s as any).secondYearGrade != null)
+      this.prefillIfPresent('Grade – 2nd Year (main session)', String((s as any).secondYearGrade));
+    if ((s as any).thirdYearGrade  != null)
+      this.prefillIfPresent('Grade – 3rd Year (main session)', String((s as any).thirdYearGrade));
+    if ((s as any).fourthYearGrade != null)
+      this.prefillIfPresent('Grade – 4th Year (main session)', String((s as any).fourthYearGrade));
+    if ((s as any).fifthYearGrade  != null)
       this.prefillIfPresent('Grade – 5th Year (main session)', String((s as any).fifthYearGrade));
   }
 
@@ -324,28 +416,26 @@ export class ApplyPageComponent implements OnInit {
     const d = new Date(s);
     if (isNaN(d.getTime())) return '—';
     const y = d.getFullYear();
-    const m = String(d.getMonth()+1).padStart(2,'0');
-    const da = String(d.getDate()).padStart(2,'0');
+    const m = (d.getMonth() + 1).toString().padStart(2, '0');
+    const da = d.getDate().toString().padStart(2, '0');
     return `${y}-${m}-${da}`;
   }
 
-  formatProgram(s: StudentSelfView): string {
-    // try to reconstruct what you showed in screenshot:
-    // "TELECOM - IOSYS · Class 4TH" style
+  formatProgram(s: any): string {
     const bits: string[] = [];
-    if ((s as any).field)        bits.push(String((s as any).field));
-    if ((s as any).optionCode)   bits.push(String((s as any).optionCode));
-    if ((s as any).currentClass) bits.push(`Class ${String((s as any).currentClass)}`);
+    if (s.field)        bits.push(String(s.field));
+    if (s.optionCode)   bits.push(String(s.optionCode));
+    if (s.currentClass) bits.push(`Class ${String(s.currentClass)}`);
     return bits.join(' · ');
   }
 
-  formatGrades(s: StudentSelfView): string {
+  formatGrades(s: any): string {
     const parts: string[] = [];
-    if ((s as any).firstYearGrade  != null) parts.push(`Y1:${(s as any).firstYearGrade}`);
-    if ((s as any).secondYearGrade != null) parts.push(`Y2:${(s as any).secondYearGrade}`);
-    if ((s as any).thirdYearGrade  != null) parts.push(`Y3:${(s as any).thirdYearGrade}`);
-    if ((s as any).fourthYearGrade != null) parts.push(`Y4:${(s as any).fourthYearGrade}`);
-    if ((s as any).fifthYearGrade  != null) parts.push(`Y5:${(s as any).fifthYearGrade}`);
+    if (s.firstYearGrade  != null) parts.push(`Y1:${s.firstYearGrade}`);
+    if (s.secondYearGrade != null) parts.push(`Y2:${s.secondYearGrade}`);
+    if (s.thirdYearGrade  != null) parts.push(`Y3:${s.thirdYearGrade}`);
+    if (s.fourthYearGrade != null) parts.push(`Y4:${s.fourthYearGrade}`);
+    if (s.fifthYearGrade  != null) parts.push(`Y5:${s.fifthYearGrade}`);
     return parts.join(' | ');
   }
 
@@ -395,9 +485,11 @@ export class ApplyPageComponent implements OnInit {
     });
   }
 
-  backToOffers() {
-    history.back();
-  }
+  backToOffers() { history.back(); }
 
   trackByIndex(i:number){ return i; }
+
+  onOfferImgError(ev: Event) {
+    (ev.target as HTMLImageElement).src = '';
+  }
 }

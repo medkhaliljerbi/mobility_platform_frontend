@@ -1,22 +1,32 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, catchError, forkJoin, map,of,switchMap } from 'rxjs';
+import { Observable, catchError, switchMap, forkJoin, map, of } from 'rxjs';
 import { environment } from 'src/environments/environment';
+import { tap } from 'rxjs/operators';
 
 export type OfferType   = 'EXCHANGE' | 'DOUBLE_DEGREE' | 'MASTERS';
 export type TargetYear  = 'FOURTH'   | 'FIFTH';
 export type OfferStatus = 'OPEN'     | 'CLOSED';
+export type ApplicationStatus =
+  | 'SUBMITTED'
+  | 'PRESELECTED'
+  | 'WAITING_DOCS'
+  | 'DOCS_UPLOADED'
+  | 'CONTRACT'
+  | 'CONTRACT_SUBMITTED'
+  | 'CONTRACT_APPROVED'
+  | 'REJECTED';
 
 export interface OfferView {
   id: number;
   title: string;
   description: string;
-  seats: number;                 // maps to backend column (a.k.a availableSlots in some UIs)
-  deadline: string | null;       // ISO
+  seats: number;
+  deadline: string | null;
   type: OfferType;
   targetYear: TargetYear;
-esprit: boolean;
-  // snapshot fields on the Offer entity
+  esprit: boolean;
+
   universityName: string;
   countryCode?: string | null;
   addressLine?: string | null;
@@ -26,10 +36,33 @@ esprit: boolean;
   topicTags: string[] | null;
   requiredDocs: string[] | null;
   formJson: { fields: string[] } | null;
+
+  // ⭐ NEW: modules announced in backend DTO
+  modules?: string[] | null;
+
   status: OfferStatus;
   imageObjectKey?: string | null;
   imageUrl?: string | null;
   createdAt?: string;
+
+  // ⭐ Optional: URL of attached offer file (affiche)
+  offerFileUrls?: { [filename: string]: string };
+}
+
+export interface MyApplicationView {
+  applicationId: number;
+  status: ApplicationStatus;
+  finalScore?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+
+  offerId?: number | null;
+  offerTitle?: string | null;
+  offerUniversityName?: string | null;
+  offerCountryCode?: string | null;
+  offerDeadline?: string | null;
+  offerImageUrl?: string | null;
+  modules?: string[] | null;
 }
 
 export interface OfferCreatePayload {
@@ -40,7 +73,7 @@ export interface OfferCreatePayload {
   type: OfferType;
   targetYear: TargetYear;
   esprit?: boolean;
-  // snapshot fields in payload
+
   universityName: string;
   countryCode?: string | null;
   addressLine?: string | null;
@@ -49,18 +82,23 @@ export interface OfferCreatePayload {
 
   topicTags?: string[] | null;
   requiredDocs?: string[] | null;
-  formJson?: string | { fields: string[] } | null; // jsonb
+  formJson?: string | { fields: string[] } | null;
+
+  // ⭐ NEW: modules field for creation
+  modules?: string[] | null;
+
+  // ⭐ NEW: map of offer files (label -> key or null)
+  offerFiles?: { [label: string]: string | null } | null;
 }
 
-/* ------------ NEW: scoring/recommendation DTOs (mirror backend) ------------ */
 export interface CertContrib {
   certificateId?: number | null;
   certificateName?: string | null;
-  sSem: number;     // semantic
-  sKw: number;      // keyword
-  sTopic: number;   // topic-tag
+  sSem: number;
+  sKw: number;
+  sTopic: number;
   levelWeight: number;
-  sMatch: number;   // combined
+  sMatch: number;
 }
 
 export interface RecommendationItem {
@@ -81,23 +119,20 @@ export interface MyScore {
   explain?: { certContribs?: CertContrib[] };
 }
 
-/* ------------ NEW: application DTOs ------------ */
-export interface MyApplicationView {
-  id: number;
-  offerId: number;
-  status: string;          // "SUBMITTED", etc.
-  createdAt?: string;
-  gradeScore?: number;
-  certScore?: number;
-  finalScore?: number;
-  answersJson?: Record<string, any>;
+
+interface Page<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
 }
 
 @Injectable({ providedIn: 'root' })
 export class OfferService {
   private http = inject(HttpClient);
   private readonly base = environment.apiBase.replace(/\/+$/, '') + '/api';
-  private url(p: string) { return `${this.base}/${p.replace(/^\/+/, '')}`; }
+  private url(p: string) {
+    return `${this.base}/${p.replace(/^\/+/, '')}`;
+  }
 
   private authHeaders(): HttpHeaders {
     const token =
@@ -108,31 +143,61 @@ export class OfferService {
       '';
     return token ? new HttpHeaders({ Authorization: `Bearer ${token}` }) : new HttpHeaders();
   }
-  private opts() { return { withCredentials: true, headers: this.authHeaders() }; }
 
-  /* ----------------------------- CRUD + image ------------------------------ */
+  private opts() {
+    return { withCredentials: true, headers: this.authHeaders() };
+  }
 
+  // -------------------- CRUD --------------------
   createOffer(payload: OfferCreatePayload): Observable<OfferView> {
-    const body: any = { ...payload };
-    if (typeof body.formJson === 'string') {
-      try { body.formJson = JSON.parse(body.formJson); } catch {}
-    }
+    const body =
+      typeof payload.formJson === 'string'
+        ? { ...payload, formJson: safeJson(payload.formJson) }
+        : payload;
     return this.http.post<OfferView>(this.url('/offers'), body, this.opts());
   }
 
+  /** PRIVATE: only my offers (Partner / Mobility Officer) */
+  getMyOffers(): Observable<OfferView[]> {
+    return this.http.get<OfferView[]>(this.url('/offers/mine'), this.opts());
+  }
+
+  /** PUBLIC-visible (server filters by role: entrant vs student, etc.) */
+  getVisibleOffers(page = 0, size = 200): Observable<OfferView[]> {
+    return this.http
+      .get<Page<OfferView>>(this.url(`/offers/visible?page=${page}&size=${size}`), this.opts())
+      .pipe(map(p => p?.content ?? []));
+  }
+
+  /** Legacy: all (useful for admin tools; not used in public list) */
   getAllOffers(): Observable<OfferView[]> {
     return this.http.get<OfferView[]>(this.url('/offers/all'), this.opts());
+  }
+
+  // OfferService
+  getVisibleOffersOrAll(page = 0, size = 200): Observable<OfferView[]> {
+    return this.getVisibleOffers(page, size).pipe(
+      switchMap(rows => (rows && rows.length > 0 ? of(rows) : this.getAllOffers())),
+      catchError(() => this.getAllOffers())
+    );
   }
 
   getOffer(id: number): Observable<OfferView> {
     return this.http.get<OfferView>(this.url(`/offers/${id}`), this.opts());
   }
 
-  updateOffer(id: number, patch: Partial<OfferCreatePayload & { status: OfferStatus }>): Observable<OfferView> {
-    const body: any = { ...patch };
-    if (typeof body.formJson === 'string') {
-      try { body.formJson = JSON.parse(body.formJson); } catch {}
+  updateOffer(
+    id: number,
+    patch: Partial<OfferCreatePayload> & {
+      modules?: string[] | null;
+      offerFiles?: { [label: string]: string | null } | null;
     }
+  ): Observable<OfferView> {
+    const body =
+      typeof patch.formJson === 'string'
+        ? { ...patch, formJson: safeJson(patch.formJson) }
+        : patch;
+
     return this.http.put<OfferView>(this.url(`/offers/${id}`), body, this.opts());
   }
 
@@ -150,12 +215,27 @@ export class OfferService {
     return this.http.delete<OfferView>(this.url(`/offers/${id}/image`), this.opts());
   }
 
-  openOffer(id: number){  return this.http.put<OfferView>(this.url(`/offers/${id}/open`),  {}, this.opts()); }
-  closeOffer(id: number){ return this.http.put<OfferView>(this.url(`/offers/${id}/close`), {}, this.opts()); }
+  // ⭐ NEW: upload offer attached file (affiche PDF / DOC / image)
+uploadOfferFile(id: number, file: File): Observable<OfferView> {
+  const form = new FormData();
 
-  /* ----------------- student recommendations & scoring ----------------- */
+  // label = nom du fichier (ce que tu veux voir dans les chips côté UI)
+  form.append('label', file.name);
+  form.append('file', file);
 
-  /** GET /api/offers/recommendations?limit=N */
+  return this.http.post<OfferView>(this.url(`/offers/${id}/file`), form, this.opts());
+}
+
+
+
+  openOffer(id: number) {
+    return this.http.put<OfferView>(this.url(`/offers/${id}/open`), {}, this.opts());
+  }
+  closeOffer(id: number) {
+    return this.http.put<OfferView>(this.url(`/offers/${id}/close`), {}, this.opts());
+  }
+
+  // --------------- recommendations ---------------
   getRecommendations(limit = 20): Observable<RecommendationItem[]> {
     return this.http.get<RecommendationItem[]>(
       this.url(`/offers/recommendations?limit=${limit}`),
@@ -163,81 +243,144 @@ export class OfferService {
     );
   }
 
-  /** GET /api/offers/{offerId}/my-score */
   getMyScore(offerId: number): Observable<MyScore> {
     return this.http.get<MyScore>(this.url(`/offers/${offerId}/my-score`), this.opts());
   }
 
-  /**
-   * Fetch recommendations and hydrate each item with full OfferView (for image, tags…).
-   * Returns an array sorted by recoScore desc.
-   */
+  /** Hydrate recs with visible offers only (server already filtered by role) */
   getRecommendedOffersHydrated(limit = 20): Observable<(OfferView & RecommendationItem)[]> {
     return forkJoin({
-      offers: this.getAllOffers(),
-      recs:   this.getRecommendations(limit)
+      offers: this.getVisibleOffers(0, 200),
+      recs: this.getRecommendations(limit)
     }).pipe(
       map(({ offers, recs }) => {
         const byId = new Map<number, OfferView>(offers.map(o => [o.id, o]));
         return recs
           .map(r => {
             const full = byId.get(r.offerId);
-            if (!full) return null; // drop if no full offer data
-            return { ...full, ...r } as (OfferView & RecommendationItem);
+            if (!full) return null;
+            return { ...full, ...r } as OfferView & RecommendationItem;
           })
           .filter((x): x is OfferView & RecommendationItem => x !== null)
           .sort((a, b) => (b.recoScore ?? 0) - (a.recoScore ?? 0));
-      })
+      }),
+      catchError(() => of([]))
     );
   }
 
   /* ------------------------- applications (Module 1) ------------------------- */
 
-// check if I already applied to this offer
-getMyApplicationForOffer(offerId: number) {
-  return this.http.get<any>(
-    this.url(`/applications/${offerId}/me`),
-    this.opts()
-  );
-}
+  getMyApplicationForOffer(offerId: number) {
+    return this.http.get<any>(this.url(`/applications/${offerId}/me`), this.opts());
+  }
 
-// submit first-stage application
-submitApplication(offerId: number, answers: Record<string,string>) {
-  return this.http.post<any>(
-    this.url(`/applications/${offerId}`),
-    { answers }, // matches backend controller body { "answers": {...} }
-    this.opts()
-  );
-}
+  submitApplication(offerId: number, answers: Record<string, string>) {
+    return this.http.post<any>(
+      this.url(`/applications/${offerId}`),
+      { answers },
+      this.opts()
+    );
+  }
 
-getOffersRankedByMyScore(limit = 20): Observable<(OfferView & RecommendationItem)[]> {
-  return this.getAllOffers().pipe(
-    switchMap((offers) => {
-      if (!offers || offers.length === 0) return of([]);
+  getApplicationProcess(offerId: number) {
+    return this.http.get<any>(
+      this.url(`/applications/${offerId}/process`),
+      this.opts()
+    );
+  }
 
-      const calls = offers.map((o) =>
-        this.getMyScore(o.id).pipe(
-          map((ms) => ({
-            ...o,
-            // map my-score fields into the RecommendationItem shape
-            certScore: ms.certScore,
-            gradeScore: ms.gradeScore,
-            recoScore: ms.finalScore,   // <-- reuse existing UI field
-          }) as OfferView & RecommendationItem),
-          // if a single my-score fails, just drop that item
-          catchError(() => of(null))
-        )
+  getMyApplications(): Observable<MyApplicationView[]> {
+    return this.http
+      .get<MyApplicationView[]>(this.url('/applications/my'), this.opts())
+      .pipe(
+        map(rows => {
+          if (!Array.isArray(rows)) return [];
+          return rows.map(r => ({
+            offerTitle: null,
+            offerUniversityName: null,
+            offerCountryCode: null,
+            offerDeadline: null,
+            offerImageUrl: null,
+            updatedAt: null,
+            ...r
+          }));
+        }),
+        catchError((err: any) => {
+          console.error('getMyApplications() error', err);
+          return of([]);
+        })
       );
+  }
 
-      return forkJoin(calls).pipe(
-        map(items =>
-          (items.filter(Boolean) as (OfferView & RecommendationItem)[])
-            .sort((a,b) => (b.recoScore ?? 0) - (a.recoScore ?? 0))
-            .slice(0, limit)
-        )
-      );
-    })
-  );
+  uploadRequiredDocument(
+    appId: number,
+    label: string,
+    file?: File,
+    existingDocumentId?: number
+  ) {
+    const form = new FormData();
+    form.append('label', label);
+
+    if (file) form.append('file', file);
+    if (existingDocumentId != null) {
+      form.append('existingDocumentId', String(existingDocumentId));
+    }
+
+    return this.http.post<any>(
+      this.url(`/applications/${appId}/required-doc`),
+      form,
+      this.opts()
+    );
+  }
+
+  uploadCertification(
+    appId: number,
+    label: string,
+    file?: File,
+    existingCertId?: number
+  ) {
+    const form = new FormData();
+    form.append('label', label);
+
+    if (file) form.append('file', file);
+    if (existingCertId != null) {
+      form.append('existingCertId', String(existingCertId));
+    }
+
+    return this.http.post<any>(
+      this.url(`/applications/${appId}/certification`),
+      form,
+      this.opts()
+    );
+  }
+
+  deleteCertification(appId: number, label: string) {
+    return this.http.delete<any>(
+      this.url(`/applications/${appId}/certification?label=${encodeURIComponent(label)}`),
+      this.opts()
+    );
+  }
+
+  deleteRequiredDocument(appId: number, label: string) {
+    return this.http.delete<any>(
+      this.url(`/applications/${appId}/required-doc?label=${encodeURIComponent(label)}`),
+      this.opts()
+    );
+  }
+
+  submitAllDocuments(appId: number): Observable<any> {
+    return this.http.post<any>(
+      this.url(`/applications/${appId}/submit-docs`),
+      {},
+      this.opts()
+    );
+  }
 }
 
+function safeJson(s: string) {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
 }

@@ -22,6 +22,22 @@ export interface ProfileDocument {
 
 export type StudentType = 'SORTANT' | 'ENTRANT';
 
+// ===== Mobility Contract (Student POV) =====
+
+export interface ChefOptionStudentView {
+  id: number;
+  fullName: string;
+  field: string;
+  option: string;
+}
+
+export interface StudentMobilityContractView {
+  chefOptionId: number;
+  chefOptionName: string;
+  approved: boolean | null; // null = pending, true = approved, false = rejected
+  contractDownloadUrl: string;
+}
+
 export interface StudentSelfView {
   // identity
   email: string;
@@ -230,6 +246,101 @@ presignDocumentUrl(id: number) {
     ...this.opts(),
     responseType: 'text',
   });
+}
+// ===== Applications =====
+
+// HARD DELETE application (student only)
+deleteMyApplication(appId: number) {
+  return this.http.delete<{
+    message: string;
+    applicationId: number;
+  }>(`${this.base}/applications/${appId}`, this.opts());
+}
+// =====================================================
+// MOBILITY CONTRACT — STUDENT SIDE
+// =====================================================
+
+/**
+ * Download the GENERIC mobility contract template
+ * (uploaded by Mobility Officer)
+ */
+downloadMobilityContractTemplate(): Observable<string> {
+  return this.http.get(
+    `${this.base}/mobility-contract/template/download`,
+    {
+      ...this.opts(),
+      responseType: 'text'
+    }
+  );
+}
+
+/**
+ * List ChefOptions available for contract submission
+ */
+getChefOptionsForContract(): Observable<ChefOptionStudentView[]> {
+  return this.http.get<ChefOptionStudentView[]>(
+    `${this.base}/mobility-contract/chef-options`,
+    this.opts()
+  );
+}
+
+/**
+ * Upload signed mobility contract to ONE ChefOption
+ * → sets approved = null
+ * → application status becomes CONTRACT_SUBMITTED (backend)
+ */
+uploadSignedMobilityContract(
+  applicationId: number,
+  chefOptionId: number,
+  file: File
+): Observable<void> {
+
+  const form = new FormData();
+  form.append('applicationId', String(applicationId));
+  form.append('chefOptionId', String(chefOptionId));
+  form.append('file', file);
+
+  return this.http.post<void>(
+    `${this.base}/mobility-contract/signed`,
+    form,
+    this.opts()
+  );
+}
+
+/**
+ * Get student mobility contract (if already submitted)
+ * Used to:
+ *  - disable upload
+ *  - show approval / rejection
+ */
+getMyMobilityContract(
+  applicationId: number
+): Observable<StudentMobilityContractView | null> {
+
+  return this.http.get<StudentMobilityContractView | null>(
+    `${this.base}/mobility-contract/my`,
+    {
+      ...this.opts(),
+      params: new HttpParams().set('applicationId', String(applicationId))
+    }
+  );
+}
+
+/**
+ * Download the signed mobility contract uploaded by the student
+ */
+downloadMySignedMobilityContract(
+  applicationId: number
+): Observable<string> {
+
+  return this.http.get(
+    `${this.base}/mobility-contract/signed/download`,
+    {
+      ...this.opts(),
+      params: new HttpParams().set('applicationId', String(applicationId)),
+      responseType: 'text'
+    }
+  );
 }
 
 }

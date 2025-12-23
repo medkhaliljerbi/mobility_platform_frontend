@@ -22,6 +22,6 @@ export const roleHomeGuard: CanActivateFn = (): boolean | UrlTree => {
 
     default:
       // ⬅️ IMPORTANT: allow Dashboard to render
-      return true;
+      return router.parseUrl('/pages/offer/public');
   }
 };

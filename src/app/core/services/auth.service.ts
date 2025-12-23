@@ -30,6 +30,28 @@ export interface InvitePreviewDto {
   personnelPhoneNumber: string;
 }
 
+export interface EntrantSignupPayload {
+  // Common
+  username: string;
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+  email: string;
+  personalEmail?: string | null;
+  password: string;
+  maritalStatus?: string | null;
+  personnelPhoneNumber: string;
+  domicilePhoneNumber?: string | null;
+
+  // Entrant
+  contactEmail?: string | null;
+  homeDepartmentOrProgram?: string | null;
+  homeUniversityName?: string | null;
+  homeUniversityCountry?: string | null;
+  mobilityStart?: string | null; // yyyy-MM-dd
+  mobilityEnd?: string | null;   // yyyy-MM-dd
+  nominationReference?: string | null;
+}
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   // KEEP your original base
@@ -56,6 +78,12 @@ export class AuthService {
   signup(body: any): Observable<any> {
     return this.http.post<any>(`${this.base}/signup`, body, { headers: this.json });
   }
+
+    /** 🆕 Public entrant-only signup */
+  signupEntrant(body: EntrantSignupPayload): Observable<{ message: string } | any> {
+    return this.http.post(`${this.base}/signup/entrant`, body, { headers: this.json });
+  }
+
 
   // ✅ original login (now also persists role)
   login(body: LoginRequest): Observable<{ token?: string; raw: RawLoginResponse }> {

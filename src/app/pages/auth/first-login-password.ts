@@ -42,7 +42,7 @@ import { AuthService } from 'src/app/core/services/auth.service';
           </p>
           <div class="mt-6 flex justify-end gap-3">
             <button pButton type="button" class="p-button-text" label="Close" (click)="showOverlay = false"></button>
-            <button pButton type="button" label="Go to login" (click)="router.navigate(['/auth/login-other'])"></button>
+            <button pButton type="button" label="Go to login" (click)="router.navigate(['/auth/login'])"></button>
           </div>
         </div>
       </div>
@@ -111,7 +111,7 @@ import { AuthService } from 'src/app/core/services/auth.service';
                 type="button"
                 class="w-full p-button-text mt-3"
                 label="Back to login"
-                (click)="router.navigate(['/auth/login-other'])">
+                (click)="goBack()">
               </button>
             </form>
           </div>
@@ -168,7 +168,9 @@ export class FirstLoginPasswordComponent implements OnInit {
       }
     });
   }
-
+  goBack() {
+    this.router.navigate(['/auth/login']);
+  }
   private base64UrlDecode(input: string): string {
     const pad = input.length % 4 === 2 ? '==' : input.length % 4 === 3 ? '=' : '';
     const b64 = input.replace(/-/g, '+').replace(/_/g, '/') + pad;

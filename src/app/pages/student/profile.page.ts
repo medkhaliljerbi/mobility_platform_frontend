@@ -71,7 +71,7 @@ const MARITAL_STATUS_OPTIONS = [
     DatePickerModule, InputNumberModule, ToastModule
   ],
   providers: [MessageService],
- styles: [`
+  styles: [`
   /* Layout */
   .page { display:flex; justify-content:center; padding:.5rem; }
   .shell { width:100%; max-width:1120px; margin:0 auto; } /* was 720px */
@@ -137,8 +137,7 @@ const MARITAL_STATUS_OPTIONS = [
   /* Trim card’s inner padding a bit so content feels wider */
   :host ::ng-deep .p-card .p-card-body { padding: 1rem 1.25rem; }
   :host ::ng-deep .p-card .p-card-title { font-size: 1.25rem; }
-`]
-,
+`],
   template: `
 <p-fluid>
   <div class="page bg-surface-50 dark:bg-surface-950">
@@ -150,7 +149,9 @@ const MARITAL_STATUS_OPTIONS = [
             <span class="flex gap-2">
               <button *ngIf="!editing()" pButton label="Edit" icon="pi pi-pencil" (click)="onEdit()"></button>
               <button *ngIf="editing()" pButton class="p-button-secondary" label="Cancel" icon="pi pi-times" (click)="onCancel()"></button>
-              <button *ngIf="editing()" pButton class="p-button-success" label="Save" icon="pi pi-check" (click)="onSave()" [disabled]="form.invalid || busy()"></button>
+              <button *ngIf="editing()" pButton class="p-button-success" label="Save" icon="pi pi-check"
+                      (click)="onSave()"
+                      [disabled]="!form.dirty || form.invalid || busy()"></button>
             </span>
           </div>
         </ng-template>
@@ -298,8 +299,8 @@ const MARITAL_STATUS_OPTIONS = [
               </div>
             </div>
 
-            <!-- Grades (Year-based) -->
-            <div class="grades">
+            <!-- Grades (Year-based) — only for SORTANT -->
+            <div class="grades" *ngIf="isSortant()">
               <div class="field" [class.locked]="!editing()">
                 <div class="label">First Year *</div>
                 <p-inputNumber formControlName="firstYearGrade"
@@ -378,7 +379,7 @@ export class StudentProfilePageComponent implements OnInit {
     entryDate: <Date | null>(null),
     expectedExitDate: <Date | null>(null),
 
-    // ENTRANT — NEW
+    // ENTRANT
     homeUniversityName: [''],
     homeUniversityCountry: [''],
     homeDepartmentOrProgram: [''],
@@ -387,7 +388,7 @@ export class StudentProfilePageComponent implements OnInit {
     mobilityStart: <Date | null>(null),
     mobilityEnd: <Date | null>(null),
 
-    // === Year-based grades (NEW) ===
+    // Year-based grades
     firstYearGrade:  <any>[null, [Validators.required, Validators.min(0), Validators.max(20)]],
     secondYearGrade: <any>[null, [Validators.required, Validators.min(0), Validators.max(20)]],
     thirdYearGrade:  <any>[null, [Validators.min(0), Validators.max(20)]],
@@ -413,6 +414,9 @@ export class StudentProfilePageComponent implements OnInit {
         this.m.set(me);
         this.espritId.set(me.studentIdentifier ?? null);
         this.patchFromModel(me);
+
+        // Adjust grade validators based on type so ENTRANT doesn't get blocked
+        this.setGradeValidators(me.type === 'SORTANT');
       },
       error: (err) => this.toast.add({ severity: 'error', summary: 'Load failed', detail: this.err(err) })
     });
@@ -446,7 +450,7 @@ export class StudentProfilePageComponent implements OnInit {
     setIfDirty('entryDate',           'entryDate',           v.entryDate ? this.ymd(v.entryDate as Date) : null);
     setIfDirty('expectedExitDate',    'expectedExitDate',    v.expectedExitDate ? this.ymd(v.expectedExitDate as Date) : null);
 
-    // ENTRANT — NEW
+    // ENTRANT
     setIfDirty('homeUniversityName',      'homeUniversityName',      v.homeUniversityName ?? null);
     setIfDirty('homeUniversityCountry',   'homeUniversityCountry',   v.homeUniversityCountry ?? null);
     setIfDirty('homeDepartmentOrProgram', 'homeDepartmentOrProgram', v.homeDepartmentOrProgram ?? null);
@@ -455,7 +459,7 @@ export class StudentProfilePageComponent implements OnInit {
     setIfDirty('mobilityStart',           'mobilityStart',           v.mobilityStart ? this.ymd(v.mobilityStart as Date) : null);
     setIfDirty('mobilityEnd',             'mobilityEnd',             v.mobilityEnd ? this.ymd(v.mobilityEnd as Date) : null);
 
-    // === Year-based grades (NEW) ===
+    // Grades
     setIfDirty('firstYearGrade',  'firstYearGrade',  typeof v.firstYearGrade  === 'number' ? v.firstYearGrade  : null);
     setIfDirty('secondYearGrade', 'secondYearGrade', typeof v.secondYearGrade === 'number' ? v.secondYearGrade : null);
     setIfDirty('thirdYearGrade',  'thirdYearGrade',  typeof v.thirdYearGrade  === 'number' ? v.thirdYearGrade  : null);
@@ -503,8 +507,11 @@ export class StudentProfilePageComponent implements OnInit {
   }
 
   private patchFromModel(me: StudentSelfView) {
+    const ms = (me.maritalStatus || '').trim();
     const normalizedMarital =
-      (me.maritalStatus === 'Mr' || me.maritalStatus === 'Mrs') ? 'Married' : (me.maritalStatus ?? '');
+      (ms === 'Mr' || ms === 'Mrs' || ms.toLowerCase() === 'married') ? 'Married' :
+      (ms.toLowerCase() === 'single' || ms.toLowerCase() === 'not married') ? 'Not married' :
+      '';
 
     this.form.reset({
       // contact
@@ -529,12 +536,35 @@ export class StudentProfilePageComponent implements OnInit {
       mobilityStart: me.mobilityStart ? new Date(me.mobilityStart) : null,
       mobilityEnd: me.mobilityEnd ? new Date(me.mobilityEnd) : null,
 
-      // === Year-based grades (NEW) ===
+      // Grades
       firstYearGrade:  me.firstYearGrade ?? null,
       secondYearGrade: me.secondYearGrade ?? null,
       thirdYearGrade:  me.thirdYearGrade ?? null,
       fourthYearGrade: me.fourthYearGrade ?? null
     });
+  }
+
+  private setGradeValidators(isSortant: boolean) {
+    const y1 = this.form.get('firstYearGrade')!;
+    const y2 = this.form.get('secondYearGrade')!;
+    const y3 = this.form.get('thirdYearGrade')!;
+    const y4 = this.form.get('fourthYearGrade')!;
+
+    if (isSortant) {
+      y1.setValidators([Validators.required, Validators.min(0), Validators.max(20)]);
+      y2.setValidators([Validators.required, Validators.min(0), Validators.max(20)]);
+    } else {
+      // entrant: grades can all be null (no required)
+      y1.setValidators([Validators.min(0), Validators.max(20)]);
+      y2.setValidators([Validators.min(0), Validators.max(20)]);
+    }
+    y3.setValidators([Validators.min(0), Validators.max(20)]);
+    y4.setValidators([Validators.min(0), Validators.max(20)]);
+
+    y1.updateValueAndValidity({ emitEvent: false });
+    y2.updateValueAndValidity({ emitEvent: false });
+    y3.updateValueAndValidity({ emitEvent: false });
+    y4.updateValueAndValidity({ emitEvent: false });
   }
 
   private ymd(d: Date){ const y=d.getFullYear(), m=(d.getMonth()+1).toString().padStart(2,'0'), da=d.getDate().toString().padStart(2,'0'); return `${y}-${m}-${da}`; }

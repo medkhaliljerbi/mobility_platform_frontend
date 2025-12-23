@@ -130,6 +130,17 @@ updateSelf(body: AdminSelfUpdate): Observable<AdminSelfView> {
     headers: this.authHeaders()
   });
 }
+deleteUser(id: number):Observable<void>
+{
+  return this.http.delete<void>(`${this.base}/admin/users/${id}`, { headers: this.authHeaders() });
+
+}
+deleteUserByEmail(email: string):Observable<void>
+{
+  return this.http.delete<void>(`${this.base}/admin/users/Email/${email}`, { headers: this.authHeaders() });
+
+}
+
 
 }
 
@@ -165,6 +176,11 @@ export type AdminCreateUserRequest = {
   domicilePhoneNumber?: string | null;
 
   maritalStatus?: string | null;
+
+   universityName?: string | null;
+
+  type?: 'SORTANT' | 'ENTRANT';
+    studentIdentifier?: string | null;
 };
 export interface AdminSelfView {
   id: number;

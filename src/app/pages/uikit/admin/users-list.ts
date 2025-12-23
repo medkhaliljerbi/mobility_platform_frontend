@@ -126,7 +126,7 @@ type UserRow = User & {
           <td>{{ u.createdAtDate || u.createdAt | date:'MM/dd/yyyy, HH:mm' }}</td>
           <td class="text-right">
             <button pButton size="small" label="Update" icon="pi pi-pencil" class="mr-2" (click)="openUpdate(u)"></button>
-            <button pButton size="small" label="Delete" icon="pi pi-trash" severity="danger" (click)="deleteUser(u)"></button>
+            <button pButton size="small" label="Delete" icon="pi pi-trash" severity="danger" (click)="deleteUser(u.id)"></button>
           </td>
         </tr>
       </ng-template>
@@ -281,8 +281,10 @@ export class UsersListComponent implements OnInit {
     });
   }
 
-  deleteUser(u: UserRow) {
-    // TODO: confirm + API call
-    console.log('delete user', u.id);
+  deleteUser(u: number) {
+this.adminUserService.deleteUser(u)
+  }
+    deleteUserEmail(u: string) {
+this.adminUserService.deleteUserByEmail(u)
   }
 }

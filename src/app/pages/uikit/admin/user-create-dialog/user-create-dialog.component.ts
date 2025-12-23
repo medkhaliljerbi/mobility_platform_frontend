@@ -10,7 +10,8 @@ import { SelectModule } from 'primeng/select';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 
-import { AdminUserService, AdminCreateUserRequest } from 'src/app/core/services/admin-users.services';
+import { AdminUserService } from 'src/app/core/services/admin-users.services';
+import { AdminCreateUserRequest } from 'src/app/core/services/admin-users.services';
 import { User } from 'src/app/core/models/user.model';
 
 @Component({
@@ -72,7 +73,7 @@ import { User } from 'src/app/core/models/user.model';
 
         <p-divider class="divider"></p-divider>
 
-        <div class="section-title">Contact</div>
+        <div class="section-title">Contact & Role</div>
 
         <div class="field">
           <label class="required">Role</label>
@@ -121,6 +122,20 @@ import { User } from 'src/app/core/models/user.model';
           </p-select>
         </div>
 
+        <!-- PARTNER ONLY -->
+        <div class="field" *ngIf="m.role === 'PARTNER'">
+          <label class="required">University Name</label>
+          <input pInputText name="universityName" [(ngModel)]="m.universityName" required />
+        </div>
+
+        <!-- STUDENT SORTANT ONLY -->
+        <div *ngIf="m.role === 'STUDENT'">
+          <div class="field">
+            <label class="required">Student Identifier</label>
+            <input pInputText name="studentIdentifier" [(ngModel)]="m.studentIdentifier" required />
+          </div>
+        </div>
+
         <p-divider class="divider"></p-divider>
 
         <div class="actions">
@@ -149,8 +164,8 @@ import { User } from 'src/app/core/models/user.model';
   `]
 })
 export class UserCreateComponent {
-  @Input()  visible = false;
-  @Output() closed  = new EventEmitter<void>();
+  @Input() visible = false;
+  @Output() closed = new EventEmitter<void>();
   @Output() created = new EventEmitter<User>();
 
   saving = false;
@@ -171,9 +186,12 @@ export class UserCreateComponent {
     {label:'Married', value:'Married'}
   ];
 
-  m: AdminCreateUserRequest = this.empty();
+  m: any = this.empty();
 
-  constructor(private svc: AdminUserService, private toast: MessageService) {}
+  constructor(
+    private svc: AdminUserService,
+    private toast: MessageService
+  ) {}
 
   onCancel() {
     this.visible = false;
@@ -186,9 +204,9 @@ export class UserCreateComponent {
       this.toast.add({ severity:'warn', summary:'Validation', detail:'Please fix highlighted fields.' });
       return;
     }
+
     this.saving = true;
 
-    // backend only needs the minimal set; we pass exactly what it expects
     const payload: AdminCreateUserRequest = {
       username: this.nullIfEmpty(this.m.username),
       firstName: this.m.firstName.trim(),
@@ -199,12 +217,27 @@ export class UserCreateComponent {
       role: this.m.role!,
       personnelPhoneNumber: this.m.personnelPhoneNumber.trim(),
       domicilePhoneNumber: this.nullIfEmpty(this.m.domicilePhoneNumber),
-      maritalStatus: this.nullIfEmpty(this.m.maritalStatus)
+      maritalStatus: this.nullIfEmpty(this.m.maritalStatus),
     };
+
+    // Partner required field
+    if (payload.role === 'PARTNER') {
+      payload.universityName = this.m.universityName?.trim();
+    }
+
+    // Student SORTANT creation
+    if (payload.role === 'STUDENT') {
+      payload.type = 'SORTANT';
+      payload.studentIdentifier = this.m.studentIdentifier?.trim();
+    }
 
     this.svc.createAndInvite(payload).subscribe({
       next: (user) => {
-        this.toast.add({ severity:'success', summary:'User created', detail:`Invite sent to ${user.email}` });
+        this.toast.add({
+          severity: 'success',
+          summary: 'User created',
+          detail: `Invite sent to ${user.email}`
+        });
         this.saving = false;
         this.visible = false;
         this.created.emit(user);
@@ -219,7 +252,7 @@ export class UserCreateComponent {
     });
   }
 
-  private empty(): AdminCreateUserRequest {
+  private empty() {
     return {
       username: null,
       firstName: '',
@@ -227,10 +260,13 @@ export class UserCreateComponent {
       lastName: '',
       email: '',
       personalEmail: null,
-      role: undefined as any,
+      role: undefined,
       personnelPhoneNumber: '',
       domicilePhoneNumber: null,
-      maritalStatus: null
+      maritalStatus: null,
+      universityName: null,
+      studentIdentifier: null,
+      type: null
     };
   }
 
