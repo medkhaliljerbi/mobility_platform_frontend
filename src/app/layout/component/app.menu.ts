@@ -42,7 +42,7 @@ export class AppMenu {
     /* ================= ROLE EXTRAS ================= */
         const chefOptionMenu: MenuItem[] =
       role === 'CHEF_OPTION'
-        ? [
+        ? [    { label: 'Offers', icon: 'pi pi-briefcase', routerLink: ['/pages/offer/public'] },
               { label: 'Profile', icon: 'pi pi-user', routerLink: ['/pages/teacher/profile'] },
               { label: 'Contracts', icon: 'pi pi-file-edit', routerLink: ['/pages/teacher/contracts'] }
             ]
@@ -73,6 +73,11 @@ export class AppMenu {
         ? [
             { label: 'Public Offers', icon: 'pi pi-briefcase', routerLink: ['/pages/offer/public'] },
             { label: 'My Offers', icon: 'pi pi-list', routerLink: ['/pages/offer/list'] },
+             {
+          label: 'Create Offer',
+          icon: 'pi pi-plus-circle',
+          routerLink: ['/pages/offer/create']
+        },
             { label: 'Profile', icon: 'pi pi-user', routerLink: ['/pages/partner/profile'] }
           ]
         : [];
@@ -86,7 +91,11 @@ export class AppMenu {
               label: 'Mobility Contract',
               icon: 'pi pi-file-edit',
               routerLink: ['/pages/mobilityagent/mobility-contract']
-            },
+            },   {
+          label: 'Create Offer',
+          icon: 'pi pi-plus-circle',
+          routerLink: ['/pages/offer/create']
+        },
             { label: 'Profile', icon: 'pi pi-user', routerLink: ['/pages/mobilityagent/profile'] }
           ]
         : [];

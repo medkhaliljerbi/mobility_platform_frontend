@@ -29,6 +29,10 @@ const FIELD_OPTIONS: { label: string; value: FieldType }[] = [
   { label: 'GC', value: 'GC' },
   { label: 'EM', value: 'EM' }
 ];
+const CLASS_OPTIONS = [
+  { label: 'Fourth Year', value: 'FOURTH' },
+  { label: 'Fifth Year', value: 'FIFTH' }
+];
 
 const OPTIONCODE_OPTIONS: { field: FieldType; value: OptionCodeType; label: string }[] = [
   // IT
@@ -251,11 +255,17 @@ const MARITAL_STATUS_OPTIONS = [
                           class="ctrl">
                 </p-select>
               </div>
+<div class="field" [class.locked]="!editing()">
+  <div class="label">Current Class</div>
+  <p-select
+    formControlName="currentClass"
+    [options]="classOptions"
+    optionLabel="label"
+    optionValue="value"
+    class="ctrl">
+  </p-select>
+</div>
 
-              <div class="field">
-                <div class="label">Current Class</div>
-                <input pInputText formControlName="currentClass" class="ctrl" [readonly]="!editing()" />
-              </div>
 
               <div class="field" [class.locked]="!editing()">
                 <div class="label">Entry Date</div>
@@ -325,14 +335,19 @@ const MARITAL_STATUS_OPTIONS = [
                                [useGrouping]="false" [showButtons]="true" inputId="y3">
                 </p-inputNumber>
               </div>
-              <div class="field" [class.locked]="!editing()">
-                <div class="label">Fourth Year</div>
-                <p-inputNumber formControlName="fourthYearGrade"
-                               mode="decimal" [min]="0" [max]="20" [step]="0.01"
-                               locale="fr-FR" [minFractionDigits]="0" [maxFractionDigits]="2"
-                               [useGrouping]="false" [showButtons]="true" inputId="y4">
-                </p-inputNumber>
-              </div>
+  <div class="field"
+     *ngIf="!isFourthYearSelected()"
+     [class.locked]="!editing()">
+  <div class="label">Fourth Year</div>
+  <p-inputNumber
+    formControlName="fourthYearGrade"
+    mode="decimal"
+    [min]="0" [max]="20"
+    [useGrouping]="false"
+    [showButtons]="true">
+  </p-inputNumber>
+</div>
+
             </div>
 
           </form>
@@ -356,6 +371,7 @@ export class StudentProfilePageComponent implements OnInit {
   m = signal<StudentSelfView | null>(null);
   busy = signal(false);
   editing = signal(false);
+classOptions = CLASS_OPTIONS;
 
   espritId = signal<string | null>(null);
 
@@ -566,6 +582,9 @@ export class StudentProfilePageComponent implements OnInit {
     y3.updateValueAndValidity({ emitEvent: false });
     y4.updateValueAndValidity({ emitEvent: false });
   }
+isFourthYearSelected(): boolean {
+  return this.form.get('currentClass')?.value === 'FOURTH';
+}
 
   private ymd(d: Date){ const y=d.getFullYear(), m=(d.getMonth()+1).toString().padStart(2,'0'), da=d.getDate().toString().padStart(2,'0'); return `${y}-${m}-${da}`; }
   private err(e:any){ return e?.error?.message || e?.message || 'Unexpected error'; }

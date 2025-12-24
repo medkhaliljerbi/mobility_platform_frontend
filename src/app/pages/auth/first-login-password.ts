@@ -27,7 +27,6 @@ import { AuthService } from 'src/app/core/services/auth.service';
     :host ::ng-deep .pw-full .p-password .p-inputtext { width: 100% !important; }
   `],
   template: `
-    <app-floating-configurator />
     <p-toast></p-toast>
 
     <!-- Success overlay -->

@@ -135,11 +135,13 @@ deleteUser(id: number):Observable<void>
   return this.http.delete<void>(`${this.base}/admin/users/${id}`, { headers: this.authHeaders() });
 
 }
-deleteUserByEmail(email: string):Observable<void>
-{
-  return this.http.delete<void>(`${this.base}/admin/users/Email/${email}`, { headers: this.authHeaders() });
-
+deleteUserByEmail(email: string): Observable<void> {
+  return this.http.delete<void>(
+    `${this.base}/Email/${encodeURIComponent(email)}`,
+    { headers: this.authHeaders() }
+  );
 }
+
 
 
 }

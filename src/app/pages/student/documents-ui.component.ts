@@ -40,8 +40,10 @@ import { StudentService, ProfileDocument } from '@/core/services/student.service
               <input pInputText [(ngModel)]="create.name" placeholder="e.g. Passport" />
             </div>
             <div class="col-span-12 md:col-span-8">
-              <p-fileUpload #up mode="advanced" [customUpload]="true" [auto]="false"
-                            (uploadHandler)="doCreate(up)"
+              <p-fileUpload #up   mode="basic"
+  chooseLabel="Choose file"
+  [auto]="false"
+  (onSelect)="doCreate($event)"
                             [maxFileSize]="50_000_000">
                 <ng-template #empty>
                   <div>Drag and drop files to here to upload.</div>
@@ -111,14 +113,33 @@ export class DocumentsUiComponent implements OnInit {
     up.clear();
   }
 
-  doCreate(up: FileUpload) {
-    const file = up.files?.[0] as File | undefined;
-    if (!file || !this.create.name) return;
-    this.api.createDocument(file, this.create.name).subscribe({
-      next: () => { this.toast.add({severity:'success', summary:'Document created'}); this.cancelCreate(up); this.reload(); },
-      error: (e) => this.toast.add({severity:'error', summary:'Create failed', detail: e?.error || ''})
+doCreate(event: any) {
+  const file = event.files?.[0];
+  if (!file || !this.create.name) {
+    this.toast.add({
+      severity: 'warn',
+      summary: 'Missing data',
+      detail: 'Select a file and enter a name',
     });
+    return;
   }
+
+  this.api.createDocument(file, this.create.name).subscribe({
+    next: () => {
+      this.toast.add({ severity: 'success', summary: 'Document uploaded' });
+      this.showCreate = false;
+      this.create = { name: '' };
+      this.reload();
+    },
+    error: (e) =>
+      this.toast.add({
+        severity: 'error',
+        summary: 'Upload failed',
+        detail: e?.error || '',
+      }),
+  });
+}
+
 
   rename(row: ProfileDocument) {
     this.api.renameDocument(row.id, row.fileName).subscribe({

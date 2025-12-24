@@ -126,7 +126,7 @@ type UserRow = User & {
           <td>{{ u.createdAtDate || u.createdAt | date:'MM/dd/yyyy, HH:mm' }}</td>
           <td class="text-right">
             <button pButton size="small" label="Update" icon="pi pi-pencil" class="mr-2" (click)="openUpdate(u)"></button>
-            <button pButton size="small" label="Delete" icon="pi pi-trash" severity="danger" (click)="deleteUser(u.id)"></button>
+            <button pButton size="small" label="Delete" icon="pi pi-trash" severity="danger" (click)="deleteUserEmail(u.email)"></button>
           </td>
         </tr>
       </ng-template>
@@ -284,7 +284,24 @@ export class UsersListComponent implements OnInit {
   deleteUser(u: number) {
 this.adminUserService.deleteUser(u)
   }
-    deleteUserEmail(u: string) {
-this.adminUserService.deleteUserByEmail(u)
-  }
+deleteUserEmail(email: string) {
+  this.adminUserService.deleteUserByEmail(email).subscribe({
+    next: () => {
+      this.users = this.users.filter(u => u.email !== email);
+      this.toast.add({
+        severity: 'success',
+        summary: 'Deleted',
+        detail: 'User deleted successfully'
+      });
+    },
+    error: () => {
+      this.toast.add({
+        severity: 'error',
+        summary: 'Delete failed',
+        detail: 'Could not delete user'
+      });
+    }
+  });
+}
+
 }
